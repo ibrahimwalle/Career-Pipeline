@@ -1,0 +1,23 @@
+{
+  "_comment": "=== GMAIL SETUP (2 steps) ===",
+  "_step1": "1. Enable 2FA: https://myaccount.google.com/security",
+  "_step2": "2. Generate App Password: https://myaccount.google.com/apppasswords → Select 'Mail' → 'Other (Job Agent)' → copy the 16-char code",
+  "_step3": "3. Paste the code below in 'pass' for both smtp AND imap. Save as email_config.json",
+  "_step4": "4. Test: python src/inbox.py 7",
+  "smtp": {
+    "_comment": "For sending applications",
+    "host": "smtp.gmail.com",
+    "port": 587,
+    "user": "ibrahimwalle20@gmail.com",
+    "pass": "PASTE_YOUR_16_CHAR_APP_PASSWORD_HERE"
+  },
+  "imap": {
+    "_comment": "For scanning inbox for recruiter replies",
+    "host": "imap.gmail.com",
+    "port": 993,
+    "user": "ibrahimwalle20@gmail.com",
+    "pass": "PASTE_YOUR_16_CHAR_APP_PASSWORD_HERE"
+  },
+  "from": "Ibrahim Al Wali <ibrahimwalle20@gmail.com>",
+  "signature": "\n--\nIbrahim Al Wali\nAI Systems & Solutions Engineer\nibrahimwalle20@gmail.com | +44 7762890154"
+}

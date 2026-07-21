@@ -1,0 +1,37 @@
+{
+  "_description": "Contract-specific profile. Copy to contract_profile.json and fill in your details.",
+  "rates": {
+    "preferred": 0,
+    "currency": "GBP",
+    "unit": "day",
+    "range": { "min": 0, "max": 0 },
+    "hourly": { "min": 0, "preferred": 0, "max": 0 },
+    "negotiable": true
+  },
+  "availability": {
+    "notice_period": "X weeks",
+    "start_date": "negotiable",
+    "full_time_contracts": true,
+    "part_time_contracts": false,
+    "hours_per_week": { "min": 20, "ideal": 40, "max": 45 }
+  },
+  "ir35": {
+    "open_to_outside": true,
+    "open_to_inside": true,
+    "preference": "outside"
+  },
+  "company_setup": {
+    "has_limited_company": false,
+    "can_use_umbrella": true,
+    "preferred_engagement": "limited_company"
+  },
+  "contract_preferences": {
+    "min_length_months": 3,
+    "preferred_length": "6-12 months",
+    "open_to_extensions": true,
+    "remote_only": true,
+    "hybrid_locations": [],
+    "excluded_sectors": [],
+    "preferred_sectors": []
+  }
+}

@@ -1,0 +1,21 @@
+{
+  "name": "job-agent",
+  "version": "1.1.0",
+  "description": "Job search pipeline — permanent + contract roles. ATS scraping, Claude scoring, email, inbox monitor, web dashboard.",
+  "type": "module",
+  "scripts": {
+    "find": "node src/find.js",
+    "score": "node src/score.js",
+    "status": "node src/status.js",
+    "tailor": "node src/tailor.js",
+    "email": "node src/email.js",
+    "dashboard": "node src/dashboard.js",
+    "app": "node src/app.js",
+    "linkedin": "node src/linkedin_find.js",
+    "auto-apply": "node src/auto_apply.js"
+  },
+  "dependencies": {
+    "nodemailer": "^7.0.13",
+    "playwright": "^1.61.1"
+  }
+}

@@ -1,0 +1,47 @@
+{
+  "_description": "Access rules for the Job Agent. These control what the agent can do with your email and applications.",
+
+  "inbox": {
+    "read": {
+      "allow": true,
+      "scope": "unlimited",
+      "_note": "Agent may read subject, sender, body, headers — whatever is needed to classify recruiter emails. No restrictions on what can be read."
+    },
+    "write": {
+      "allow": false,
+      "require_review": true,
+      "_note": "Agent may NOT delete, archive, move, mark-as-read, or modify any email without explicit per-action approval. If an action would change inbox state, it MUST ask first."
+    },
+    "scan_filter": {
+      "mode": "pipeline_only",
+      "_note": "Only scan for emails matching companies in companies.json. Skip personal emails, newsletters, and anything unrelated to job applications."
+    }
+  },
+
+  "sending": {
+    "auto_send": {
+      "allow": true,
+      "threshold": "STRONG_MATCH",
+      "_note": "Jobs scored as STRONG_MATCH (score >= 80) may be sent automatically. GOOD_FIT, REACH, and unscored jobs always need review before sending."
+    },
+    "require_review": {
+      "thresholds": ["GOOD_FIT", "REACH", "unscored"],
+      "_note": "These jobs need explicit approval before the email is sent. The agent will draft and show you, then ask."
+    },
+    "dry_run_default": false,
+    "_note_dry_run": "Set to true to make ALL sends preview-only (safety lock). Set to false for normal operation."
+  },
+
+  "pipeline": {
+    "auto_update_status": {
+      "allow": true,
+      "_note": "Agent may automatically update job status in data/jobs.json when it detects recruiter replies (interview → 'interviewing', rejection → 'rejected', offer → 'offer'). It will always report what it changed."
+    },
+    "status_triggers": {
+      "interviewing": ["interview invite", "meet the team", "schedule a call", "next steps"],
+      "screening": ["recruiter", "initial conversation", "tell me about your background"],
+      "rejected": ["unfortunately", "not moving forward", "other candidates"],
+      "offer": ["offer letter", "pleased to offer", "compensation details"]
+    }
+  }
+}
