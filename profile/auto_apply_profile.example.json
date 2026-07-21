@@ -1,0 +1,17 @@
+{
+  "_comment": "Copy this to auto_apply_profile.json and fill in your details. This file is gitignored.",
+  "firstName": "",
+  "lastName": "",
+  "fullName": "",
+  "email": "",
+  "phone": "",
+  "location": "",
+  "linkedin": "",
+  "github": "",
+  "workEligibility": "",
+  "currentCompany": "",
+  "title": "",
+  "yearsExperience": "",
+  "education": "",
+  "cvPath": ""
+}

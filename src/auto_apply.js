@@ -1,6 +1,7 @@
 // auto_apply.js — Fill ATS application forms via Playwright
 // Usage: node src/auto_apply.js <jobId>
 // Detects Greenhouse, Lever, Ashby; fills profile fields; leaves browser open for manual review.
+// Profile data loaded from profile/auto_apply_profile.json (gitignored).
 import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'fs';
 import { resolve, dirname } from 'path';
 import { fileURLToPath } from 'url';
@@ -12,25 +13,28 @@ const DATA_DIR = resolve(ROOT, 'data');
 const OUTPUT_DIR = resolve(ROOT, 'output');
 const PERM_FILE = resolve(DATA_DIR, 'jobs.json');
 const CONTRACT_FILE = resolve(DATA_DIR, 'contract_jobs.json');
-const CV_PATH = String.raw`C:\Users\Ibrahim\Desktop\Applications\AI_CVs\IBRAHIM AL WALI - AI revised.pdf`;
+const PROFILE_FILE = resolve(ROOT, 'profile', 'auto_apply_profile.json');
 
-// ─── Profile data (hardcoded) ──────────────────────────────────────
+// ─── Profile data (loaded from gitignored file) ────────────────────
 
-const PROFILE = {
-  firstName: 'Ibrahim',
-  lastName: 'Al Wali',
-  fullName: 'Ibrahim Al Wali',
-  email: 'ibrahimwalle20@gmail.com',
-  phone: '+44 7762890154',
-  location: 'London, UK',
-  linkedin: '',
-  github: '',
-  workEligibility: 'UK citizen / full right to work',
-  currentCompany: 'MachineFlow',
-  title: 'AI Systems & Solutions Engineer',
-  yearsExperience: '5+',
-  education: 'BSc Computer Science, Lebanese International University',
-};
+function loadProfile() {
+  const defaults = {
+    firstName: '', lastName: '', fullName: '', email: '', phone: '',
+    location: '', linkedin: '', github: '', workEligibility: '',
+    currentCompany: '', title: '', yearsExperience: '', education: '',
+    cvPath: '',
+  };
+  if (!existsSync(PROFILE_FILE)) {
+    console.error('X No profile/auto_apply_profile.json found.');
+    console.error('  Create it from profile/auto_apply_profile.example.json');
+    console.error('  This file is gitignored — your personal data stays local.');
+    process.exit(1);
+  }
+  return { ...defaults, ...JSON.parse(readFileSync(PROFILE_FILE, 'utf-8')) };
+}
+
+const PROFILE = loadProfile();
+const CV_PATH = PROFILE.cvPath;
 
 // ─── ATS detection ─────────────────────────────────────────────────
 

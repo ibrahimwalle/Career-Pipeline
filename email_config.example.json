@@ -8,16 +8,16 @@
     "_comment": "For sending applications",
     "host": "smtp.gmail.com",
     "port": 587,
-    "user": "ibrahimwalle20@gmail.com",
+    "user": "your.email@gmail.com",
     "pass": "PASTE_YOUR_16_CHAR_APP_PASSWORD_HERE"
   },
   "imap": {
     "_comment": "For scanning inbox for recruiter replies",
     "host": "imap.gmail.com",
     "port": 993,
-    "user": "ibrahimwalle20@gmail.com",
+    "user": "your.email@gmail.com",
     "pass": "PASTE_YOUR_16_CHAR_APP_PASSWORD_HERE"
   },
-  "from": "Ibrahim Al Wali <ibrahimwalle20@gmail.com>",
-  "signature": "\n--\nIbrahim Al Wali\nAI Systems & Solutions Engineer\nibrahimwalle20@gmail.com | +44 7762890154"
+  "from": "Your Name <your.email@gmail.com>",
+  "signature": "\n--\nYour Name\nAI Systems & Solutions Engineer\nyour.email@gmail.com | Phone"
 }
