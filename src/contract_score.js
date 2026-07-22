@@ -3,7 +3,7 @@
 import { readFileSync, writeFileSync, existsSync, mkdirSync, appendFileSync } from 'fs';
 import { resolve, dirname } from 'path';
 import { fileURLToPath } from 'url';
-import { spawnSync } from 'child_process';
+import { spawn } from 'child_process';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = resolve(__dirname, '..');
@@ -45,50 +45,34 @@ Return a JSON object with NO other text:
 }`;
 }
 
-function scoreWithClaude(job) {
-  const promptDir = resolve(DATA_DIR, 'contract_prompts');
-  if (!existsSync(promptDir)) mkdirSync(promptDir, { recursive: true });
-  const promptFile = resolve(promptDir, `score_${job.id}.txt`);
-  writeFileSync(promptFile, buildScorePrompt(job));
+function scoreOneWithClaude(job) {
+  return new Promise((resolve) => {
+    const promptDir = resolve(DATA_DIR, 'contract_prompts');
+    if (!existsSync(promptDir)) mkdirSync(promptDir, { recursive: true });
+    const promptFile = resolve(promptDir, `score_${job.id}.txt`);
+    writeFileSync(promptFile, buildScorePrompt(job));
 
-  try {
-    const result = spawnSync('claude', [
-      '--print', '--output-format', 'text', '--dangerously-skip-permissions'
-    ], {
-      cwd: ROOT, timeout: 120000, maxBuffer: 4 * 1024 * 1024, encoding: 'utf-8',
-      input: readFileSync(promptFile, 'utf-8'),
+    const child = spawn('claude', ['--print', '--output-format', 'text', '--dangerously-skip-permissions'], {
+      cwd: ROOT, timeout: 180000, maxBuffer: 4 * 1024 * 1024, encoding: 'utf-8',
+      env: { ...process.env, PYTHONIOENCODING: 'utf-8', PYTHONUTF8: '1' }
     });
-
-    if (result.error) {
-      const msg = result.error.code === 'ETIMEDOUT' ? 'Claude timed out (120s)' : result.error.message;
-      console.error(`  X ${msg}`);
-      logCrash(job.id, msg, { code: result.error.code, stderr: String(result.stderr || '').slice(0, 200) });
-      return null;
-    }
-    if (result.status !== 0) {
-      console.error(`  X Claude exited ${result.status}: ${String(result.stderr || '').slice(0, 150)}`);
-      logCrash(job.id, `exit ${result.status}`, { stderr: String(result.stderr || '').slice(0, 300) });
-      return null;
-    }
-
-    const stdout = result.stdout || '';
-    const jsonMatch = stdout.match(/\{[\s\S]*"score"[\s\S]*\}/);
-    if (jsonMatch) {
-      const parsed = JSON.parse(jsonMatch[0]);
-      return {
-        score: parsed.score, verdict: parsed.verdict, rate_fit: parsed.rate_fit,
-        rate_note: parsed.rate_note, strengths: parsed.strengths || [], gaps: parsed.gaps || [],
-        pitch_angles: parsed.pitch_angles || [], ir35_note: parsed.ir35_note || '', reasoning: parsed.reasoning || '',
-      };
-    }
-    console.error(`  ⚠ No JSON in response (${stdout.length} chars)`);
-    logCrash(job.id, 'no_json', { stdoutLen: stdout.length, stdoutPreview: stdout.slice(0, 400) });
-    return null;
-  } catch (e) {
-    console.error(`  X Unexpected crash: ${e.message}`);
-    logCrash(job.id, `unexpected: ${e.message}`, { stack: e.stack?.slice(0, 400) });
-    return null;
-  }
+    child.stdin.write(readFileSync(promptFile, 'utf-8'));
+    child.stdin.end();
+    let stdout = ''; let stderr = '';
+    child.stdout.on('data', d => { stdout += d.toString(); });
+    child.stderr.on('data', d => { stderr += d.toString(); });
+    child.on('close', code => {
+      if (code !== 0) { logCrash(job.id, `exit ${code}`, { stderr: stderr.slice(0, 200) }); resolve(null); return; }
+      const jsonMatch = stdout.match(/\{[\s\S]*"score"[\s\S]*\}/);
+      if (jsonMatch) {
+        try {
+          const p = JSON.parse(jsonMatch[0]);
+          resolve({ score: p.score, verdict: p.verdict, rate_fit: p.rate_fit, rate_note: p.rate_note, strengths: p.strengths || [], gaps: p.gaps || [], pitch_angles: p.pitch_angles || [], ir35_note: p.ir35_note || '', reasoning: p.reasoning || '' });
+        } catch { resolve(null); }
+      } else { resolve(null); }
+    });
+    child.on('error', () => resolve(null));
+  });
 }
 
 function detectIR35(job) {
@@ -126,34 +110,40 @@ async function main() {
   const count = Math.min(process.argv[2] ? parseInt(process.argv[2]) : 10, unscored.length);
   const toScore = unscored.slice(0, count);
 
-  console.log(`\nScoring ${toScore.length} contract jobs against contract profile...\n`);
+  const BATCH = 5;
+  console.log(`\nScoring ${toScore.length} contract jobs (${BATCH} at a time)...\n`);
   console.log(`Profile: profile/contract_profile.json + profile/master_doc.md\n`);
 
-  for (let i = 0; i < toScore.length; i++) {
-    const job = toScore[i];
-    process.stdout.write(`[${i + 1}/${toScore.length}] ${job.title} @ ${job.company}... `);
+  let scored = 0; let failed = 0;
+  for (let i = 0; i < toScore.length; i += BATCH) {
+    const batch = toScore.slice(i, i + BATCH);
+    const startN = i + 1;
+    const endN = Math.min(i + BATCH, toScore.length);
+    process.stdout.write(`[${startN}-${endN}/${toScore.length}] Scoring... `);
 
-    const scoring = scoreWithClaude(job);
-    if (scoring) {
-      const idx = jobs.findIndex(j => j.id === job.id);
-      jobs[idx].score = scoring.score;
-      jobs[idx].verdict = scoring.verdict;
-      jobs[idx].scoring = scoring;
-      jobs[idx].status = 'scored';
-      jobs[idx].scoredAt = new Date().toISOString();
-      // IR35 detection from job description text
-      const ir35Tags = detectIR35(jobs[idx]);
-      if (ir35Tags.ir35_status) jobs[idx].ir35_status = ir35Tags.ir35_status;
-      if (ir35Tags.rate_type) jobs[idx].rate_type = ir35Tags.rate_type;
-      const rateStr = scoring.rate_fit !== 'UNKNOWN' ? ` [rate: ${scoring.rate_fit}]` : '';
-      process.stdout.write(`${scoring.verdict} (${scoring.score}/100)${rateStr}\n`);
-      writeFileSync(JOBS_FILE, JSON.stringify(jobs, null, 2));
-    } else {
-      process.stdout.write(`FAILED\n`);
+    const results = await Promise.all(batch.map(job => scoreOneWithClaude(job)));
+    let bs = 0; let bf = 0;
+    for (let r = 0; r < batch.length; r++) {
+      const scoring = results[r];
+      if (scoring) {
+        const job = batch[r];
+        const idx = jobs.findIndex(j => j.id === job.id);
+        if (idx !== -1) {
+          jobs[idx].score = scoring.score; jobs[idx].verdict = scoring.verdict;
+          jobs[idx].scoring = scoring; jobs[idx].status = 'scored'; jobs[idx].scoredAt = new Date().toISOString();
+          const ir35 = detectIR35(jobs[idx]);
+          if (ir35.ir35_status) jobs[idx].ir35_status = ir35.ir35_status;
+          if (ir35.rate_type) jobs[idx].rate_type = ir35.rate_type;
+        }
+        bs++;
+      } else { bf++; }
     }
+    process.stdout.write(`${bs} scored, ${bf} failed\n`);
+    scored += bs; failed += bf;
+    try { writeFileSync(JOBS_FILE, JSON.stringify(jobs, null, 2)); } catch {}
   }
 
-  console.log(`\nDone. Contract jobs saved to data/contract_jobs.json`);
+  console.log(`\nDone. ${scored} scored, ${failed} failed. Contract jobs saved.`);
 }
 
 main().catch(e => { console.error(e); process.exit(1); });
