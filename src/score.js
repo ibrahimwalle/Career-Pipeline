@@ -116,7 +116,7 @@ async function main() {
     process.exit(1);
   }
 
-  const unscored = jobs.filter(j => j.status === 'new' && j.score === null);
+  const unscored = jobs.filter(j => j.score == null);
 
   if (unscored.length === 0) {
     console.log('All jobs already scored. Run "node src/status.js" to view.');

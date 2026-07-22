@@ -100,7 +100,7 @@ const server = createServer((req, res) => {
       interviewing: jobs.filter(j => isC ? ['interviewing','client_call'].includes(j.status) : ['interviewing','screening'].includes(j.status)).length,
       offer: jobs.filter(j => isC ? ['offer','won'].includes(j.status) : j.status==='offer').length,
       rejected: jobs.filter(j => isC ? ['rejected','lost'].includes(j.status) : j.status==='rejected').length,
-      strong: jobs.filter(j => (j.score||0) >= 80).length,
+      strong: jobs.filter(j => (j.verdict==='STRONG_MATCH'||(j.score||0)>=70)).length,
     };
     jobs.forEach(j => { stats[`src_${j.source}`] = (stats[`src_${j.source}`]||0)+1; });
     return json(res, stats);

@@ -479,7 +479,7 @@ function renderTable(jobs){
   const statusLabels={new:'New',scored:'Scored',applied:'Applied',bid:'Bid',screening:'Screening',interviewing:'Interviewing',client_call:'Client Call',offer:'Offer',won:'Won',rejected:'Rejected',lost:'Lost'};
 
   tbody.innerHTML=jobs.slice(0,300).map(j=>{
-    const sc=(j.score||0)>=80?'score-high':(j.score||0)>=60?'score-mid':'score-low';
+    const sc=(j.verdict==='STRONG_MATCH'||(j.score||0)>=70)?'score-high':(j.score||0)>=60?'score-mid':'score-low';
     const score=j.score!=null?j.score:'—';
     let vClass,vLabel;
     if(isC){ vLabel=j.verdict||'unscored'; vClass=j.verdict==='BID'?'v-strong':j.verdict==='APPLY'?'v-good':j.verdict==='REACH'?'v-reach':'v-skip'; }

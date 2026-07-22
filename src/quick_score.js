@@ -48,36 +48,25 @@ const PROFILE_GAPS = [
 ];
 
 function quickScore(job) {
-  let score = 40; // baseline
+  let score = 25; // baseline — harder to hit 100
   const title = (job.title || '').toLowerCase();
   const desc = (job.description || '').toLowerCase();
   const text = title + ' ' + desc;
   const loc = (job.location || '').toLowerCase();
-  let reasons = [];
 
-  // 1. Skill matches (+up to 40)
+  // 1. Skill matches (+0 to 25, each point matters)
   let skillScore = 0;
-  let skillsMatched = [];
+  const skillsMatched = [];
   for (const [skill, weight] of Object.entries(PROFILE_SKILLS)) {
     if (text.includes(skill)) {
       skillScore += weight;
-      if (weight >= 6) skillsMatched.push(skill);
+      if (weight >= 7) skillsMatched.push(skill);
     }
   }
-  skillScore = Math.min(skillScore, 40);
+  skillScore = Math.min(skillScore, 25); // capped — no inflation
   score += skillScore;
 
-  // 2. Title relevance (+up to 15)
-  const strongTitles = ['ai engineer', 'integration engineer', 'fde', 'forward deployed', 'solutions engineer',
-    'backend engineer', 'full stack', 'platform engineer', 'cloud engineer', 'systems engineer',
-    'implementation engineer', 'technical account manager', 'sales engineer', 'customer engineer',
-    'software engineer', 'project manager', 'developer advocate', 'devrel'];
-  const weakTitles = ['staff engineer', 'senior staff', 'principal', 'architect', 'director',
-    'vp ', 'head of engineering', 'machine learning engineer', 'data scientist', 'research scientist'];
-  if (strongTitles.some(t => title.includes(t))) score += 15;
-  else if (weakTitles.some(t => title.includes(t))) score -= 5;
-
-  // 3. Location (+up to 15)
+  // ── Location tiers ──
   const uk = ['london', 'united kingdom', 'uk', 'england', 'dublin', 'ireland'];
   const europe = ['germany', 'berlin', 'netherlands', 'amsterdam', 'france', 'paris',
     'spain', 'barcelona', 'madrid', 'sweden', 'stockholm', 'switzerland', 'zurich'];
@@ -85,43 +74,82 @@ function quickScore(job) {
   const lebanon = ['beirut', 'lebanon'];
   const remote = ['remote', 'anywhere', 'distributed', 'wfh'];
 
-  if (uk.some(l => loc.includes(l))) score += 15;
-  else if (lebanon.some(l => loc.includes(l))) score += 14;
-  else if (europe.some(l => loc.includes(l))) score += 12;
-  else if (gulf.some(l => loc.includes(l))) score += 8;
-  else if (remote.some(l => loc.includes(l))) score += 5;
-  else score -= 3; // on-site somewhere not preferred
+  // 2. Title fit: strong roles +8, weak roles penalize hard
+  const strongRoles = ['ai engineer', 'integration engineer', 'fde', 'forward deployed',
+    'solutions engineer', 'backend engineer', 'full stack', 'platform engineer',
+    'implementation engineer', 'sales engineer', 'customer engineer', 'software engineer',
+    'project manager', 'developer advocate', 'devrel', 'cloud engineer'];
+  // These are not for you — penalize
+  const offTrack = ['staff engineer', 'senior staff', 'principal engineer', 'senior principal',
+    'distinguished engineer', 'vp ', 'director of engineering', 'head of engineering',
+    'research scientist', 'data scientist', 'firmware engineer', 'hardware engineer'];
+  const niche = ['architect', 'solutions architect', 'pre-sales', 'presales',
+    'machine learning engineer', 'ml engineer', 'data engineer'];
 
-  // 4. Profile gap penalties (-up to 15)
+  if (strongRoles.some(t => title.includes(t))) score += 8;
+  else if (offTrack.some(t => title.includes(t))) score -= 10;
+  else if (niche.some(t => title.includes(t))) score += 2; // adjacent, not core
+
+  // 3. Location (+3 to +12)
+  if (uk.some(l => loc.includes(l))) score += 12;
+  else if (lebanon.some(l => loc.includes(l))) score += 11;
+  else if (europe.some(l => loc.includes(l))) score += 9;
+  else if (gulf.some(l => loc.includes(l))) score += 7;
+  else if (remote.some(l => loc.includes(l))) score += 3;
+  // on-site in non-preferred location: no bonus, no penalty
+
+  // 4. Experience level mismatch
+  const levelText = title + ' ' + desc.slice(0, 200);
+  const requiresSeniorPlus = /\b(8\+|10\+|12\+)\s*(years|yrs)/i.test(levelText);
+  const requiresStaff = /\b(staff|principal|distinguished)\b/i.test(title);
+  const yourLevel = 'mid-senior (5 years)';
+  if (requiresStaff) score -= 8;      // Staff/Principal is a reach
+  else if (requiresSeniorPlus) score -= 4; // 8+ YOE is a stretch
+
+  // 5. Language barriers
+  const langReqs = ['german fluency', 'italian fluency', 'french fluency', 'spanish fluency',
+    'japanese fluency', 'korean fluency', 'mandarin', 'arabic fluency'];
+  if (langReqs.some(l => text.includes(l))) score -= 12;
+
+  // 6. Gap penalties (-up to 12)
   let gapPenalty = 0;
   for (const gap of PROFILE_GAPS) {
     if (text.includes(gap)) {
-      // Only penalize if it's a hard requirement (appears early in description, near "required"/"must")
       const idx = desc.indexOf(gap);
       const before = desc.slice(Math.max(0, idx - 100), idx);
-      if (/require|must have|essential|need|proficient/i.test(before)) {
+      if (/require|must have|essential|proficient in|strong|expert/i.test(before)) {
         gapPenalty += 3;
       }
     }
   }
-  score -= Math.min(gapPenalty, 15);
+  score -= Math.min(gapPenalty, 12);
 
-  // 5. Freshness (+up to 5)
+  // 7. Freshness (+1 to +4)
   if (job.posted) {
     const daysOld = (Date.now() - new Date(job.posted)) / 86400000;
-    if (daysOld <= 3) score += 5;
-    else if (daysOld <= 7) score += 3;
-    else if (daysOld > 30) score -= 2;
+    if (daysOld <= 3) score += 4;
+    else if (daysOld <= 7) score += 2;
+    else if (daysOld > 30) score -= 3;
   }
+
+  // 8. Company stage (from shared.js pattern)
+  const startups = ['monzo', 'revolut', 'wise', 'ramp', 'vercel', 'linear', 'elevenlabs',
+    'livekit', 'retool', 'mercury', 'rippling', 'deel', 'bolt', 'n26', 'careem', 'sentry',
+    'airtable', 'plaid', 'duolingo', 'postman'];
+  const scaleups = ['stripe', 'spotify', 'figma', 'notion', 'cloudflare', 'discord',
+    'canva', 'shopify', 'reddit', 'adyen'];
+  const coName = (job.company || '').toLowerCase();
+  if (startups.some(c => coName.includes(c))) score += 5;
+  else if (scaleups.some(c => coName.includes(c))) score += 2;
 
   // Clamp
   score = Math.max(5, Math.min(100, score));
 
-  // Generate verdict
+  // Verdicts (tighter thresholds)
   let verdict = 'REACH';
-  if (score >= 75) verdict = 'STRONG_MATCH';
-  else if (score >= 55) verdict = 'GOOD_FIT';
-  else if (score < 25) verdict = 'SKIP';
+  if (score >= 70) verdict = 'STRONG_MATCH';
+  else if (score >= 50) verdict = 'GOOD_FIT';
+  else if (score < 30) verdict = 'SKIP';
 
   const reasoning = `${skillsMatched.slice(0, 3).join(', ')} match. Location: ${loc.slice(0, 40)}. ` +
     (gapPenalty > 0 ? `${gapPenalty}pt gap penalty. ` : '') +
@@ -144,7 +172,7 @@ async function main() {
   }
 
   const jobs = JSON.parse(readFileSync(JOBS_FILE, 'utf-8'));
-  const unscored = jobs.filter(j => j.score === null && j.status === 'new');
+  const unscored = jobs.filter(j => j.score == null);
   const toScore = unscored.slice(0, Math.min(count, unscored.length));
 
   if (!toScore.length) {
