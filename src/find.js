@@ -93,42 +93,49 @@ async function fetchAshby(slug) {
 // ─── Filtering (reads scrape_config.json) ──────────────────────
 
 function isEngineeringRole(job, config) {
-  const text = `${job.title} ${job.description}`.toLowerCase();
+  const title = (job.title || '').toLowerCase();
+  const text = `${title} ${job.description || ''}`.toLowerCase();
   const keywords = config.role_keywords || [];
   const excludes = config.exclude_roles || [];
-  // Use word boundaries for short exclusion terms (≤4 chars) to avoid false positives
+  // Only check excludes against the JOB TITLE, not the full description.
+  // Descriptions often mention "work with account executives" etc.
   for (const kw of excludes) {
     if (kw.length <= 4) {
-      if (new RegExp(`\\b${kw}\\b`).test(text)) return false;
-    } else if (text.includes(kw)) {
+      if (new RegExp(`\\b${kw}\\b`, 'i').test(title)) return false;
+    } else if (title.includes(kw)) {
       return false;
     }
   }
+  // Role keywords checked against title + description
   return keywords.some(kw => text.includes(kw));
 }
 
 function isRemoteFriendly(job, config) {
-  const text = `${job.location} ${job.title} ${job.description}`.toLowerCase();
+  const loc = (job.location || '').toLowerCase();
+  const text = `${loc} ${job.title || ''}`.toLowerCase();
   const prefs = config.remote_preference || {};
   const locs = config.locations || { include: ['remote', 'london'], exclude: [] };
 
-  // Check exclusions first
+  // Remote jobs bypass location exclusion
+  const remoteTerms = ['remote', 'anywhere', 'distributed', 'work from home', 'wfh'];
+  const isRemote = remoteTerms.some(r => text.includes(r));
+
+  // Check inclusions first (preferred locations pass unconditionally)
+  if (locs.include && locs.include.some(l => loc.includes(l) || text.includes(l))) return true;
+
+  // Remote jobs are always OK
+  if (isRemote) return true;
+
+  // Location exclusion (only for non-remote jobs)
   if (locs.exclude && locs.exclude.some(l => text.includes(l))) return false;
 
-  // Check inclusions
-  if (locs.include && locs.include.some(l => text.includes(l))) return true;
-
   // If remote_only and no remote indicators, reject
-  if (prefs.remote_only) {
-    const remoteTerms = ['remote', 'anywhere', 'distributed', 'work from home', 'wfh'];
-    if (!remoteTerms.some(r => text.includes(r))) return false;
-  }
+  if (prefs.remote_only) return false;
 
-  // If exclude_onsite is set and job says on-site without remote
+  // If exclude_onsite and job says on-site without remote
   if (prefs.exclude_onsite) {
     const onsite = ['on-site', 'onsite', 'in-office', 'in office'];
-    const remoteTerms = ['remote', 'hybrid', 'anywhere', 'distributed'];
-    if (onsite.some(o => text.includes(o)) && !remoteTerms.some(r => text.includes(r))) return false;
+    if (onsite.some(o => text.includes(o)) && !isRemote) return false;
   }
 
   return true;
@@ -136,12 +143,9 @@ function isRemoteFriendly(job, config) {
 
 function isMidOrSenior(job, config) {
   const title = job.title.toLowerCase();
-  const excludes = config.exclude_roles || [];
-  // Use the exclude list from config + regex patterns
-  const seniorityExcludes = ['junior', 'intern', 'graduate', 'entry.level', 'apprentice'];
+  // Only exclude interns, graduates, entry-level
+  const seniorityExcludes = ['intern', 'graduate', 'entry level', 'apprentice'];
   if (seniorityExcludes.some(kw => new RegExp(`\\b${kw}\\b`, 'i').test(title))) return false;
-  const leadershipExcludes = ['vp of', 'vice president', 'chief ', 'director of engineering', 'head of engineering'];
-  if (leadershipExcludes.some(kw => title.includes(kw))) return false;
   return true;
 }
 

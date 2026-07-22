@@ -49,14 +49,14 @@ export function computeRelevance(job, config) {
 
   // 6. Company stage bonus (startups: +8, scale-ups: +5, big tech: +2)
   const startups = ['monzo', 'revolut', 'wise', 'ramp', 'vercel', 'linear', 'elevenlabs',
-    'livekit', 'retool', 'mercury', 'rippling', 'brex', 'deel', 'pleo', 'bolt', 'n26',
-    'careem', 'tabby', 'kitopi'];
-  const scaleups = ['stripe', 'anthropic', 'airbnb', 'spotify', 'databricks', 'figma',
-    'notion', 'cloudflare', 'discord', 'plaid', 'sentry', 'canva', 'gitlab', 'github',
-    'airtable', 'twilio', 'shopify'];
+    'livekit', 'retool', 'mercury', 'rippling', 'deel', 'bolt', 'n26', 'careem', 'sentry',
+    'airtable', 'plaid', 'duolingo', 'postman'];
+  const scaleups = ['stripe', 'spotify', 'figma', 'notion', 'cloudflare', 'discord',
+    'canva', 'shopify', 'reddit', 'adyen'];
   const bigTech = ['google', 'meta', 'apple', 'amazon', 'microsoft', 'netflix', 'uber',
-    'atlassian', 'palantir', 'dropbox', 'openai', 'spotify', 'asana', 'pagerduty',
-    'elastic', 'zalando', 'delivery hero', 'klarna', 'booking', 'adyen'];
+    'anthropic', 'openai', 'databricks', 'airbnb', 'atlassian', 'palantir', 'dropbox',
+    'twilio', 'asana', 'pagerduty', 'gitlab', 'github', 'elastic',
+    'zalando', 'delivery hero', 'klarna', 'booking'];
 
   const coName = (job.company || '').toLowerCase();
   if (startups.some(c => coName.includes(c))) score += 8;

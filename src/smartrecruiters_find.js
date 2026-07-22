@@ -71,29 +71,20 @@ async function fetchSmartRecruiters(company) {
 
 
 function isRemoteFriendly(job, config) {
-  const text = `${job.location} ${job.title} ${job.description}`.toLowerCase();
+  const loc = (job.location || '').toLowerCase();
+  const text = `${loc} ${job.title || ''}`.toLowerCase();
   const prefs = config.remote_preference || {};
   const locs = config.locations || { include: ['remote', 'london'], exclude: [] };
-
-  // Check exclusions first
+  const remoteTerms = ['remote', 'anywhere', 'distributed', 'work from home', 'wfh'];
+  const isRemote = remoteTerms.some(r => text.includes(r));
+  if (locs.include && locs.include.some(l => loc.includes(l) || text.includes(l))) return true;
+  if (isRemote) return true;
   if (locs.exclude && locs.exclude.some(l => text.includes(l))) return false;
-
-  // Check inclusions
-  if (locs.include && locs.include.some(l => text.includes(l))) return true;
-
-  // If remote_only and no remote indicators, reject
-  if (prefs.remote_only) {
-    const remoteTerms = ['remote', 'anywhere', 'distributed', 'work from home', 'wfh'];
-    if (!remoteTerms.some(r => text.includes(r))) return false;
-  }
-
-  // If exclude_onsite is set and job says on-site without remote
+  if (prefs.remote_only) return false;
   if (prefs.exclude_onsite) {
     const onsite = ['on-site', 'onsite', 'in-office', 'in office'];
-    const remoteTerms = ['remote', 'hybrid', 'anywhere', 'distributed'];
-    if (onsite.some(o => text.includes(o)) && !remoteTerms.some(r => text.includes(r))) return false;
+    if (onsite.some(o => text.includes(o)) && !isRemote) return false;
   }
-
   return true;
 }
 
