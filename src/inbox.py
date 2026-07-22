@@ -68,6 +68,28 @@ SCREENING_KEYWORDS = [
     'quick chat', 'introductory call',
 ]
 
+# Emails that should NEVER be classified as recruiter emails
+SPAM_PATTERNS = [
+    'back market', 'your order', 'delivered', 'shipping',
+    'it\'s better on the app', 'new device registration',
+    'remember me', 'get published', 'your story matters',
+    'top 5 roles i matched', 'new matches:',
+    'new jobs:', 'jobs and', 'more jobs',
+    'welcome to', 'your account', 'password reset',
+    'verify your', 'confirm your', 'unsubscribe',
+    'newsletter', 'weekly digest', 'monthly roundup',
+    'course', 'webinar', 'masterclass', 'bootcamp',
+    'discount', 'offer ends', 'sale', 'shop',
+    'order confirmed', 'tracking', 'receipt',
+    'noreply@', 'no-reply@', 'donotreply@',
+    'notification', 'alert', 'reminder',
+]
+
+def is_spam_or_newsletter(subject, from_addr, body):
+    """Detect shopping emails, newsletters, and job recommendation digests."""
+    text = f"{subject} {from_addr} {body[:500]}".lower()
+    return any(pattern in text for pattern in SPAM_PATTERNS)
+
 # Known ATS / recruiter domains
 RECRUITER_DOMAINS = [
     'greenhouse.io', 'lever.co', 'ashbyhq.com', 'workablemail.com',
@@ -261,6 +283,10 @@ def scan_inbox(days=14):
 
             # Skip if from yourself
             if email_user.lower() in sender_email.lower():
+                continue
+
+            # Skip spam/newsletters/job-digests BEFORE classification
+            if is_spam_or_newsletter(subject, sender_email, body):
                 continue
 
             # Check if it could be recruiter-related

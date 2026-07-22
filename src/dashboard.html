@@ -301,6 +301,14 @@
         <option value="strong">Strong match only</option>
         <option value="good">Good fit+</option>
       </select>
+      <select id="locationFilter" style="background:var(--surface);border:1px solid var(--border);color:var(--text);padding:4px 8px;border-radius:4px;font-size:11px" onchange="currentLocation=this.value;renderTable(filterAndSort())">
+        <option value="">All locations</option>
+        <option value="uk">UK</option>
+        <option value="europe">Europe</option>
+        <option value="gulf">Gulf</option>
+        <option value="lebanon">Lebanon</option>
+        <option value="remote">Remote</option>
+      </select>
       <input type="text" id="search" placeholder="Search...">
       <span class="count" id="count"></span>
     </div>
@@ -363,7 +371,7 @@
 </div>
 
 <script>
-let allJobs=[], currentStatus='all', currentSort='score', currentTab='perm', currentVerdict='', expanded=null;
+let allJobs=[], currentStatus='all', currentSort='score', currentTab='perm', currentVerdict='', currentLocation='', expanded=null;
 let runningJobs=[], toastTimer;
 
 function api(u) { return fetch(u).then(r=>r.json()); }
@@ -380,8 +388,21 @@ function filterAndSort(){
   else if (currentStatus==='interviewing') j=j.filter(x=>apiActive.includes(x.status));
   else if (currentStatus==='offer') j=j.filter(x=>apiOffer.includes(x.status));
   else if (currentStatus==='rejected') j=j.filter(x=>apiReject.includes(x.status));
-  if (currentVerdict==='strong') j=j.filter(x=>x.score>=80);
+  if (currentVerdict==='strong'||currentStatus==='strong') j=j.filter(x=>x.score>=80);
   else if (currentVerdict==='good') j=j.filter(x=>x.score>=60);
+  if (currentStatus==='strong') currentStatus='all'; // reset filter button state
+  // Location filter
+  if (currentLocation) {
+    const locMap = {
+      uk: ['london','united kingdom','uk','england','manchester','edinburgh','birmingham','bristol','cambridge'],
+      europe: ['germany','berlin','munich','netherlands','amsterdam','france','paris','sweden','stockholm','denmark','copenhagen','switzerland','zurich','austria','vienna','spain','barcelona','madrid','portugal','lisbon','belgium','brussels','ireland','dublin','italy','milan','rome','finland','helsinki','norway','oslo','poland','warsaw','czech','prague','estonia','tallinn','slovenia','ljubljana','croatia','zagreb','europe','eu'],
+      gulf: ['dubai','uae','abu dhabi','riyadh','saudi','doha','qatar','kuwait','bahrain','manama','muscat','oman','sharjah'],
+      lebanon: ['beirut','lebanon'],
+      remote: ['remote','anywhere','distributed','wfh','work from home'],
+    };
+    const keywords = locMap[currentLocation] || [];
+    if (keywords.length) j=j.filter(x=>keywords.some(k=>(x.location||'').toLowerCase().includes(k)));
+  }
   const q=(document.getElementById('search')?.value||'').toLowerCase();
   if (q) j=j.filter(x=>(x.title+x.company+(x.location||'')+(x.description||'')).toLowerCase().includes(q));
   if (currentSort==='score') j.sort((a,b)=>(b.score||b.relevance||0)-(a.score||a.relevance||0));
@@ -409,14 +430,40 @@ async function load(){
 
 function renderStats(s,isC){
   document.getElementById('stats').innerHTML=`
-    <div class="stat"><div class="num" style="color:var(--yellow)">${s.strong||0}</div><div class="label">${isC?'Bid':'Strong'}</div></div>
-    <div class="stat"><div class="num" style="color:var(--green)">${s.scored||0}</div><div class="label">Scored</div></div>
-    <div class="stat"><div class="num" style="color:var(--accent)">${s.applied||0}</div><div class="label">Applied</div></div>
-    <div class="stat"><div class="num" style="color:var(--purple)">${s.interviewing||0}</div><div class="label">Active</div></div>
-    <div class="stat"><div class="num" style="color:var(--yellow)">${s.offer||0}</div><div class="label">${isC?'Won':'Offers'}</div></div>
-    <div class="stat"><div class="num" style="color:var(--red)">${s.rejected||0}</div><div class="label">${isC?'Lost':'Rejected'}</div></div>
-    <div class="stat"><div class="num" style="color:var(--muted)">${s.total||0}</div><div class="label">Total</div></div>
+    <div class="stat" onclick="clickStat('strong')" style="cursor:pointer" title="Click to filter">
+      <div class="num" style="color:var(--yellow)">${s.strong||0}</div><div class="label">${isC?'Bid':'Strong'}</div></div>
+    <div class="stat" onclick="clickStat('scored')" style="cursor:pointer" title="Click to filter">
+      <div class="num" style="color:var(--green)">${s.scored||0}</div><div class="label">Scored</div></div>
+    <div class="stat" onclick="clickStat('applied')" style="cursor:pointer" title="Click to filter">
+      <div class="num" style="color:var(--accent)">${s.applied||0}</div><div class="label">Applied</div></div>
+    <div class="stat" onclick="clickStat('interviewing')" style="cursor:pointer" title="Click to filter">
+      <div class="num" style="color:var(--purple)">${s.interviewing||0}</div><div class="label">Active</div></div>
+    <div class="stat" onclick="clickStat('offer')" style="cursor:pointer" title="Click to filter">
+      <div class="num" style="color:var(--yellow)">${s.offer||0}</div><div class="label">${isC?'Won':'Offers'}</div></div>
+    <div class="stat" onclick="clickStat('rejected')" style="cursor:pointer" title="Click to filter">
+      <div class="num" style="color:var(--red)">${s.rejected||0}</div><div class="label">${isC?'Lost':'Rejected'}</div></div>
+    <div class="stat" onclick="clickStat('all')" style="cursor:pointer" title="Show all">
+      <div class="num" style="color:var(--muted)">${s.total||0}</div><div class="label">Total</div></div>
   `;
+}
+
+async function changeStatus(sel) {
+  const id = sel.dataset.jobId;
+  const newStatus = sel.value;
+  try {
+    await api(`/api/action/status?id=${id}&status=${newStatus}`);
+    toast(`Status updated to ${newStatus}`);
+    load();
+  } catch(e) { toast('Error: '+e.message); }
+}
+
+function clickStat(status) {
+  currentStatus = status;
+  document.querySelectorAll('.filters button[data-status]').forEach(b => b.classList.remove('active'));
+  const btn = document.querySelector(`.filters button[data-status="${status}"]`);
+  if (btn) btn.classList.add('active');
+  expanded = null;
+  renderTable(filterAndSort());
 }
 
 function renderTable(jobs){
@@ -436,6 +483,17 @@ function renderTable(jobs){
     else { vLabel=j.verdict||'unscored'; vClass=j.verdict==='STRONG_MATCH'?'v-strong':j.verdict==='GOOD_FIT'?'v-good':j.verdict==='REACH'?'v-reach':'v-skip'; }
     const ds=statusMap[j.status]||j.status||'new';
     const statusLabel=statusLabels[j.status]||(j.status||'new');
+    const permStatuses = [
+      {v:'new',l:'New'},{v:'scored',l:'Scored'},{v:'applied',l:'Applied'},
+      {v:'screening',l:'Screening'},{v:'interviewing',l:'Interviewing'},
+      {v:'offer',l:'Offer'},{v:'rejected',l:'Rejected'},
+    ];
+    const contractStatuses = [
+      {v:'new',l:'New'},{v:'scored',l:'Scored'},{v:'bid',l:'Bid'},
+      {v:'client_call',l:'Client Call'},{v:'won',l:'Won'},{v:'lost',l:'Lost'},
+    ];
+    const statuses = isC ? contractStatuses : permStatuses;
+    const statusOpts = statuses.map(s => `<option value="${s.v}" ${j.status===s.v?'selected':''}>${s.l}</option>`).join('');
     const reasoning=j.scoring?.reasoning||'';
     const strengths=j.scoring?.strengths||[];
     const gaps=j.scoring?.gaps||[];
@@ -460,7 +518,16 @@ function renderTable(jobs){
       <td><span class="title-link" data-filter="role" data-filter-val="${esc(j.title)}">${esc(j.title)}</span><br><span class="verdict ${vClass}">${vLabel}${rf}${ir35}</span>${ir35Tags}</td>
       <td><span class="company clickable-filter" data-filter="company" data-filter-val="${esc(j.company)}" title="Click to filter by company">${esc(j.company)}</span>${rate}<br><span style="font-size:10px;color:var(--muted)">${esc(j.source)}</span></td>
       <td><span class="location clickable-filter" data-filter="location" data-filter-val="${esc(j.location||'')}" title="Click to filter by location">${esc(j.location||'')}</span></td>
-      <td><span class="status-dot s-${ds}"></span>${statusLabel}<br><span style="font-size:10px;color:var(--muted)">${j.posted?daysAgo(j.posted):''}</span></td>
+      <td onclick="event.stopPropagation()">
+        <select class="status-dropdown" data-job-id="${j.id}" onchange="changeStatus(this)" style="background:var(--surface);border:1px solid var(--border);color:var(--text);font-size:11px;padding:2px 4px;border-radius:4px;cursor:pointer;max-width:100px">
+          <option value="new" ${j.status==='new'?'selected':''}>New</option>
+          <option value="scored" ${j.status==='scored'?'selected':''}>Scored</option>
+          <option value="applied" ${j.status==='applied'?'selected':''}>Applied</option>
+          <option value="screening" ${j.status==='screening'?'selected':''}>Screening</option>
+          <option value="interviewing" ${j.status==='interviewing'?'selected':''}>Interviewing</option>
+          <option value="offer" ${j.status==='offer'?'selected':''}>Offer</option>
+          <option value="rejected" ${j.status==='rejected'?'selected':''}>Rejected</option>
+        </select><br><span style="font-size:10px;color:var(--muted)">${j.posted?daysAgo(j.posted):''}</span></td>
       <td class="actions" onclick="event.stopPropagation()">
         <a href="${j.url||'#'}" target="_blank">Open</a>
         <a href="#" onclick="scoreOne('${j.id}')">Score</a>

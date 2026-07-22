@@ -585,6 +585,32 @@ const server = createServer((req, res) => {
     return json(res, { id: entry.id, status:'started', message:`Morning routine: ATS → LinkedIn → Himalayas → score 20 → inbox → actions` });
   }
 
+  // ── Manual status update ─────────────────────────────────
+  if (p === '/api/action/status') {
+    const jobId = url.searchParams.get('id');
+    const newStatus = url.searchParams.get('status');
+    if (!jobId || !newStatus) return json(res, {error:'id and status required'}, 400);
+    const valid = ['new','scored','applied','screening','interviewing','offer','rejected','bid','client_call','won','lost','archived'];
+    if (!valid.includes(newStatus)) return json(res, {error:'invalid status'}, 400);
+    // Try both files
+    for (const f of [JOBS_FILE, CONTRACT_JOBS_FILE]) {
+      if (!existsSync(f)) continue;
+      const jobs = JSON.parse(readFileSync(f, 'utf-8'));
+      const idx = jobs.findIndex(j => j.id === jobId);
+      if (idx !== -1) {
+        jobs[idx].status = newStatus;
+        jobs[idx].statusUpdatedAt = new Date().toISOString();
+        if (newStatus === 'applied') jobs[idx].appliedAt = new Date().toISOString();
+        if (newStatus === 'interviewing') jobs[idx].interviewingAt = new Date().toISOString();
+        if (newStatus === 'offer') jobs[idx].offerAt = new Date().toISOString();
+        if (newStatus === 'rejected') jobs[idx].rejectedAt = new Date().toISOString();
+        writeFileSync(f, JSON.stringify(jobs, null, 2));
+        return json(res, {id: jobId, status: newStatus, updated: true});
+      }
+    }
+    return json(res, {error:'job not found'}, 404);
+  }
+
   // ── Cancel running job ──────────────────────────────────
   if (p === '/api/action/cancel') {
     const rid = url.searchParams.get('id');
