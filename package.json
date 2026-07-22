@@ -4,6 +4,8 @@
   "description": "Job search pipeline — permanent + contract roles. ATS scraping, Claude scoring, email, inbox monitor, web dashboard.",
   "type": "module",
   "scripts": {
+    "start": "node src/dashboard.js",
+    "dev": "nodemon src/dashboard.js",
     "find": "node src/find.js",
     "score": "node src/score.js",
     "status": "node src/status.js",
@@ -12,10 +14,15 @@
     "dashboard": "node src/dashboard.js",
     "app": "node src/app.js",
     "linkedin": "node src/linkedin_find.js",
-    "auto-apply": "node src/auto_apply.js"
+    "auto-apply": "node src/auto_apply.js",
+    "smartrecruiters": "node src/smartrecruiters_find.js",
+    "remotive": "node src/remotive_find.js"
   },
   "dependencies": {
     "nodemailer": "^7.0.13",
     "playwright": "^1.61.1"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.14"
   }
 }

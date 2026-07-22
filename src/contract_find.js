@@ -4,6 +4,7 @@
 import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'fs';
 import { resolve, dirname } from 'path';
 import { fileURLToPath } from 'url';
+import { computeRelevance, loadScrapeConfig, DAY_MS } from './shared.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = resolve(__dirname, '..');
@@ -253,6 +254,13 @@ function isRelevantRate(job) {
 async function main() {
   if (!existsSync(DATA_DIR)) mkdirSync(DATA_DIR, { recursive: true });
 
+  // Load max_job_age_days from scrape config
+  let scrapeCfg = {};
+  const cfgPath = resolve(ROOT, 'scrape_config.json');
+  if (existsSync(cfgPath)) {
+    try { scrapeCfg = JSON.parse(readFileSync(cfgPath, 'utf-8')); } catch {}
+  }
+
   let existing = [];
   if (existsSync(JOBS_FILE)) {
     existing = JSON.parse(readFileSync(JOBS_FILE, 'utf-8'));
@@ -274,9 +282,25 @@ async function main() {
     process.stdout.write(`  ${name}... `);
     try {
       let jobs = await fn();
-      const filtered = jobs.filter(j =>
-        isEngineeringRole(j) && isContractRole(j) && isRelevantRate(j) && !existingIds.has(j.id)
-      );
+      const filtered = jobs.filter(j => {
+        if (!isEngineeringRole(j)) return false;
+        if (!isContractRole(j)) return false;
+        if (!isRelevantRate(j)) return false;
+        // Halal compliance: exclude haram industries
+        const halal = scrapeCfg.strict_filter || {};
+        if (halal.strict_mode !== false && halal.exclude_industries) {
+          const jobText = `${j.title || ''} ${j.company || ''} ${j.description || ''}`.toLowerCase();
+          if (halal.exclude_industries.some(kw => jobText.includes(kw.toLowerCase()))) return false;
+        }
+        // Freshness filter: skip jobs older than max_job_age_days
+        const maxAge = scrapeCfg.max_job_age_days || null;
+        if (maxAge && j.posted) {
+          const daysOld = (Date.now() - new Date(j.posted)) / DAY_MS;
+          if (daysOld > maxAge) return false;
+        }
+        if (existingIds.has(j.id)) return false;
+        return true;
+      });
       console.log(`${filtered.length} new matches`);
       allJobs.push(...filtered);
     } catch (e) {

@@ -1,13 +1,14 @@
 // find.js — Fetch jobs from Greenhouse, Lever, and Ashby ATS APIs
-// Pure Node.js, zero dependencies. Saves results to jobs.json
 import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'fs';
 import { resolve, dirname } from 'path';
 import { fileURLToPath } from 'url';
+import { computeRelevance, loadScrapeConfig, DAY_MS } from './shared.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = resolve(__dirname, '..');
 const DATA_DIR = resolve(ROOT, 'data');
 const JOBS_FILE = resolve(DATA_DIR, 'jobs.json');
+
 
 // ─── ATS API Fetching ───────────────────────────────────────────
 
@@ -91,28 +92,18 @@ async function fetchAshby(slug) {
 
 // ─── Filtering (reads scrape_config.json) ──────────────────────
 
-function loadScrapeConfig() {
-  const cfgPath = resolve(ROOT, 'scrape_config.json');
-  if (!existsSync(cfgPath)) {
-    // Fallback defaults if config file missing
-    return {
-      role_keywords: ['software engineer', 'backend engineer', 'full stack', 'ai engineer', 'ml engineer', 'platform engineer', 'cloud engineer', 'data engineer', 'systems engineer', 'api engineer'],
-      exclude_roles: ['junior', 'intern', 'graduate', 'entry level', 'apprentice', 'vp of', 'director', 'head of engineering', 'engineering manager', 'mobile engineer', 'ios', 'android', 'embedded', 'firmware', 'qa engineer', 'test engineer'],
-      remote_preference: { remote_only: true, hybrid_ok: true, hybrid_locations: ['london', 'united kingdom', 'uk'], exclude_onsite: true },
-      locations: { include: ['remote', 'london', 'united kingdom', 'uk', 'europe', 'anywhere', 'distributed'], exclude: [] },
-      max_jobs_per_company: null,
-    };
-  }
-  return JSON.parse(readFileSync(cfgPath, 'utf-8'));
-}
-
 function isEngineeringRole(job, config) {
   const text = `${job.title} ${job.description}`.toLowerCase();
   const keywords = config.role_keywords || [];
   const excludes = config.exclude_roles || [];
-  // Reject if any exclude keyword matches
-  if (excludes.some(kw => text.includes(kw))) return false;
-  // Accept if any role keyword matches
+  // Use word boundaries for short exclusion terms (≤4 chars) to avoid false positives
+  for (const kw of excludes) {
+    if (kw.length <= 4) {
+      if (new RegExp(`\\b${kw}\\b`).test(text)) return false;
+    } else if (text.includes(kw)) {
+      return false;
+    }
+  }
   return keywords.some(kw => text.includes(kw));
 }
 
@@ -183,11 +174,37 @@ async function main() {
     else if (c.source === 'ashby') jobs = await fetchAshby(c.slug);
 
     // Apply filters from scrape_config.json
-    const filtered = jobs.filter(j =>
-      isEngineeringRole(j, scrapeCfg) && isRemoteFriendly(j, scrapeCfg) && isMidOrSenior(j, scrapeCfg) && !existingIds.has(j.id)
-    );
-    // Apply per-company cap if set
-    const capped = scrapeCfg.max_jobs_per_company ? filtered.slice(0, scrapeCfg.max_jobs_per_company) : filtered;
+    const filtered = jobs.filter(j => {
+      if (!isEngineeringRole(j, scrapeCfg)) return false;
+      if (!isRemoteFriendly(j, scrapeCfg)) return false;
+      if (!isMidOrSenior(j, scrapeCfg)) return false;
+      // Freshness filter: skip jobs older than max_job_age_days
+      const maxAge = scrapeCfg.max_job_age_days || null;
+      if (maxAge && j.posted) {
+        const daysOld = (Date.now() - new Date(j.posted)) / DAY_MS;
+        if (daysOld > maxAge) return false;
+      }
+      // Halal compliance: exclude haram industries
+      const halal = scrapeCfg.strict_filter || {};
+      if (halal.strict_mode !== false && halal.exclude_industries) {
+        const jobText = `${j.title || ''} ${j.company || ''} ${j.description || ''}`.toLowerCase();
+        if (halal.exclude_industries.some(kw => jobText.includes(kw.toLowerCase()))) return false;
+      }
+      if (existingIds.has(j.id)) return false;
+      return true;
+    });
+    // Pre-rank: add relevance hint before Claude scoring
+    for (const j of filtered) {
+      j.relevance = computeRelevance(j, scrapeCfg);
+    }
+
+    // Sort by relevance (descending), then apply per-company cap
+    const cap = scrapeCfg.max_jobs_per_company;
+    let capped = filtered.sort((a, b) => (b.relevance || 0) - (a.relevance || 0));
+    if (cap) capped = capped.slice(0, cap);
+    // Final sort within company cap: newest first
+    capped.sort((a, b) => new Date(b.posted || 0) - new Date(a.posted || 0));
+
     console.log(`${capped.length} new matches`);
     allJobs.push(...capped);
   }

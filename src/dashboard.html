@@ -11,9 +11,13 @@
     --red:#f85149; --purple:#a371f7; --orange:#f0883e;
   }
   * { margin:0; padding:0; box-sizing:border-box; }
-  body { background:var(--bg); color:var(--text); font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-serif; line-height:1.5; }
-  .app { max-width:1440px; margin:0 auto; padding:16px 20px; display:grid; grid-template-columns:220px 1fr; gap:16px; }
-  .sidebar { position:sticky; top:16px; align-self:start; }
+  body { background:var(--bg); color:var(--text); font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-serif; line-height:1.5; height:100vh; overflow:hidden; }
+  .app { max-width:1440px; margin:0 auto; padding:16px 20px; display:grid; grid-template-columns:220px 1fr; gap:16px; height:100vh; }
+  .sidebar { overflow-y:auto; padding-right:4px; scrollbar-width:auto; }
+  .sidebar::-webkit-scrollbar { width:8px; }
+  .sidebar::-webkit-scrollbar-track { background:transparent; }
+  .sidebar::-webkit-scrollbar-thumb { background:var(--border); border-radius:4px; }
+  .sidebar::-webkit-scrollbar-thumb:hover { background:var(--muted); }
   h1 { font-size:20px; font-weight:600; margin-bottom:4px; }
   .subtitle { color:var(--muted); font-size:12px; margin-bottom:16px; }
   h3 { font-size:11px; text-transform:uppercase; letter-spacing:0.5px; color:var(--muted); margin-bottom:8px; }
@@ -39,7 +43,18 @@
   .running-item .spinner { display:inline-block; width:8px; height:8px; border-radius:50%; margin-right:6px; animation:pulse 1s infinite; }
   .running-item .done { color:var(--green); }
   .running-item .error { color:var(--red); }
-  @keyframes pulse { 0%,100% { opacity:1 } 50% { opacity:0.3 } }
+  .running-item .log-pre { font-size:10px; color:var(--muted); margin:4px 0 0 4px; white-space:pre-wrap; max-height:45px; overflow-y:hidden; cursor:pointer; padding:2px 4px; border-radius:3px; }
+  .running-item .log-pre:hover { background:rgba(88,166,255,0.06); }
+  .running-item .log-hint { font-size:9px; color:var(--border); margin-left:4px; }
+  /* Log popup */
+  .log-popup-overlay { display:none; position:fixed; top:0; left:0; right:0; bottom:0; background:rgba(0,0,0,0.7); z-index:200; justify-content:center; align-items:center; }
+  .log-popup-overlay.show { display:flex; }
+  .log-popup { background:var(--surface); border:1px solid var(--border); border-radius:10px; max-width:700px; max-height:80vh; width:90%; padding:20px; overflow-y:auto; }
+  .log-popup h3 { font-size:14px; margin-bottom:4px; color:var(--text); }
+  .log-popup .log-meta { font-size:11px; color:var(--muted); margin-bottom:12px; }
+  .log-popup pre { font-size:12px; color:var(--text); white-space:pre-wrap; line-height:1.6; background:var(--bg); padding:12px; border-radius:6px; max-height:55vh; overflow-y:auto; }
+  .log-popup .close-btn { float:right; color:var(--muted); cursor:pointer; font-size:18px; background:none; border:none; }
+  .log-popup .close-btn:hover { color:var(--text); }
 
   /* Stats */
   .stats { display:flex; gap:8px; margin-bottom:12px; flex-wrap:wrap; }
@@ -87,6 +102,8 @@
   .s-new { border:1px solid var(--muted); }
 
   .company { font-weight:600; }
+  .clickable-filter { cursor:pointer; text-decoration:underline; text-decoration-style:dotted; text-underline-offset:2px; }
+  .clickable-filter:hover { color:var(--accent); }
   .title-link { color:var(--accent); cursor:pointer; }
   .title-link:hover { text-decoration:underline; }
   .location { color:var(--muted); font-size:11px; }
@@ -105,8 +122,95 @@
   .detail-box li::before { content:'• '; color:var(--accent); }
 
   .empty { text-align:center; padding:40px 20px; color:var(--muted); }
+  .main-content { overflow-y:auto; min-height:0; padding-right:4px; scrollbar-width:auto; }
+  .main-content::-webkit-scrollbar { width:8px; }
+  .main-content::-webkit-scrollbar-track { background:transparent; }
+  .main-content::-webkit-scrollbar-thumb { background:var(--border); border-radius:4px; }
+  .main-content::-webkit-scrollbar-thumb:hover { background:var(--muted); }
+
+  .running-toggle { font-size:11px; color:var(--accent); cursor:pointer; padding:4px 8px; margin-top:2px; border-radius:4px; display:inline-block; }
+  .running-toggle:hover { background:rgba(88,166,255,0.1); }
+
   .toast { position:fixed; bottom:20px; right:20px; background:var(--accent); color:#fff; padding:10px 20px; border-radius:8px; font-size:13px; font-weight:500; z-index:100; transition:opacity .3s; }
-  @media (max-width:900px) { .app { grid-template-columns:1fr; } .sidebar { position:static; display:flex; flex-wrap:wrap; gap:6px; } .sidebar > * { flex:1; min-width:120px; } }
+
+  /* Panel (daily actions / inbox overlay) */
+  .panel { background:var(--surface); border:1px solid var(--border); border-radius:8px; padding:0; display:none; margin-bottom:12px; }
+  .panel.visible { display:block; }
+  .panel-header { display:flex; align-items:center; justify-content:space-between; padding:10px 16px; border-bottom:1px solid var(--border); }
+  .panel-header h2 { font-size:14px; font-weight:600; margin:0; }
+  .panel-header .meta { font-size:11px; color:var(--muted); }
+  .back-btn { background:var(--bg); border:1px solid var(--border); color:var(--muted); padding:4px 10px; border-radius:4px; cursor:pointer; font-size:11px; }
+  .back-btn:hover { border-color:var(--accent); color:var(--text); }
+  .panel-body { padding:10px 16px; max-height:60vh; overflow-y:auto; }
+
+  /* Action cards */
+  .action-card { background:var(--bg); border:1px solid var(--border); border-radius:6px; padding:10px 14px; margin-bottom:8px; }
+  .action-card .prio-badge { display:inline-block; font-size:10px; font-weight:700; padding:1px 8px; border-radius:10px; margin-right:8px; text-transform:uppercase; }
+  .prio-high { background:rgba(248,81,73,0.15); color:var(--red); }
+  .prio-med { background:rgba(210,153,29,0.15); color:var(--yellow); }
+  .prio-low { background:rgba(139,148,158,0.15); color:var(--muted); }
+  .action-card .action-title { font-size:13px; font-weight:600; margin-bottom:2px; }
+  .action-card .action-detail { font-size:11px; color:var(--muted); }
+  .action-card .action-suggest { font-size:11px; color:var(--accent); margin-top:4px; font-style:italic; }
+  .action-card .action-meta { font-size:10px; color:var(--muted); margin-top:3px; }
+  .action-card a { color:var(--accent); text-decoration:none; }
+  .action-card a:hover { text-decoration:underline; }
+
+  /* Email cards */
+  .email-card { background:var(--bg); border:1px solid var(--border); border-radius:6px; padding:10px 14px; margin-bottom:8px; }
+  .email-card .email-subject { font-size:13px; font-weight:600; }
+  .email-card .email-from { font-size:11px; color:var(--muted); }
+  .email-card .email-meta { display:flex; gap:8px; align-items:center; margin-top:4px; flex-wrap:wrap; }
+  .email-class { font-size:10px; font-weight:700; padding:1px 8px; border-radius:10px; text-transform:uppercase; }
+  .ec-interviewing,.ec-offer { background:rgba(63,185,80,0.15); color:var(--green); }
+  .ec-screening,.ec-recruiter_outreach { background:rgba(88,166,255,0.15); color:var(--accent); }
+  .ec-rejected { background:rgba(248,81,73,0.15); color:var(--red); }
+  .suggested-action { font-size:11px; color:var(--accent); margin-top:3px; font-style:italic; }
+  .email-date { font-size:10px; color:var(--muted); }
+  .email-matched { font-size:10px; color:var(--green); }
+
+  /* Summary banner */
+  .summary-banner { background:rgba(88,166,255,0.08); border:1px solid rgba(88,166,255,0.25); border-radius:6px; padding:10px 14px; margin-bottom:12px; font-size:12px; }
+  .summary-banner strong { color:var(--accent); }
+
+  /* Section headings in panels */
+  .section-head { font-size:11px; font-weight:600; text-transform:uppercase; letter-spacing:0.5px; color:var(--muted); padding:12px 0 6px; border-bottom:1px solid var(--border); margin-bottom:8px; }
+  .section-head .count-num { color:var(--text); font-size:13px; }
+
+  /* Inbox scanning status */
+  .inbox-scan-status { font-size:11px; color:var(--accent); margin-bottom:8px; }
+  .inbox-last-scan { font-size:10px; color:var(--muted); margin-bottom:10px; }
+
+  /* Morning prompt */
+  .morning-prompt { background:rgba(240,136,62,0.06); border:1px solid rgba(240,136,62,0.18); border-radius:6px; padding:8px 12px; margin-bottom:12px; font-size:12px; display:flex; align-items:center; justify-content:space-between; gap:8px; }
+  .morning-prompt span { color:var(--text); }
+  .morning-inline-btn { background:rgba(240,136,62,0.15); border:1px solid rgba(240,136,62,0.4); color:var(--orange); padding:3px 10px; border-radius:4px; cursor:pointer; font-size:12px; font-weight:500; white-space:nowrap; transition:all .15s; }
+  .morning-inline-btn:hover { background:rgba(240,136,62,0.25); border-color:var(--orange); }
+
+  /* Morning Routine action button */
+  .action-btn.morning-btn { background:linear-gradient(135deg, rgba(240,136,62,0.12), rgba(210,153,29,0.08)); border-color:rgba(240,136,62,0.35); font-weight:600; font-size:13px; padding:10px 12px; }
+  .action-btn.morning-btn:hover { border-color:var(--orange); background:linear-gradient(135deg, rgba(240,136,62,0.22), rgba(210,153,29,0.13)); }
+
+  /* Agency upload panel */
+  .agency-item { display:flex; align-items:flex-start; gap:10px; padding:10px 0; border-bottom:1px solid var(--border); }
+  .agency-item:last-of-type { border-bottom:none; }
+  .agency-item input[type="checkbox"] { margin-top:3px; accent-color:var(--accent); width:16px; height:16px; cursor:pointer; flex-shrink:0; }
+  .agency-item .agency-info { flex:1; min-width:0; }
+  .agency-item .agency-name { font-weight:600; font-size:13px; }
+  .agency-item .agency-spec { font-size:10px; color:var(--muted); }
+  .agency-item .agency-url { font-size:11px; color:var(--accent); text-decoration:none; word-break:break-all; }
+  .agency-item .agency-url:hover { text-decoration:underline; }
+  .agency-status { font-size:10px; font-weight:600; display:inline-block; padding:1px 8px; border-radius:10px; margin-left:6px; }
+  .ag-done { background:rgba(63,185,80,0.15); color:var(--green); }
+  .ag-pending { background:rgba(139,148,158,0.15); color:var(--muted); }
+
+  /* IR35 tags in contract table */
+  .ir35-tag { display:inline-block; font-size:10px; font-weight:600; padding:1px 6px; border-radius:8px; margin-left:4px; cursor:help; }
+  .ir35-outside { background:rgba(63,185,80,0.15); color:var(--green); }
+  .ir35-inside { background:rgba(210,153,29,0.15); color:var(--yellow); }
+  .rate-type-tag { display:inline-block; font-size:10px; font-weight:600; padding:1px 6px; border-radius:8px; margin-left:4px; background:rgba(88,166,255,0.12); color:var(--accent); cursor:help; }
+
+  @media (max-width:900px) { .app { grid-template-columns:1fr; height:auto; overflow:visible; } .sidebar { position:static; display:flex; flex-wrap:wrap; gap:6px; max-height:none; overflow-y:visible; } .sidebar > * { flex:1; min-width:120px; } .main-content { overflow-y:visible; } }
 </style>
 </head>
 <body>
@@ -116,36 +220,64 @@
     <h1>Job Pipeline</h1>
     <p class="subtitle">Ibrahim Al Wali</p>
 
+    <div class="morning-prompt" id="morning-prompt" style="display:none">
+      <span>Good morning.</span>
+      <button class="morning-inline-btn" onclick="doAction('morning');document.getElementById('morning-prompt').style.display='none'">Run routine</button>
+    </div>
+
     <div class="tab-bar">
       <button class="tab-btn active" data-tab="perm">Permanent</button>
       <button class="tab-btn" data-tab="contract">Contract</button>
     </div>
 
     <h3>Actions</h3>
+    <button class="action-btn morning-btn" onclick="doAction('morning')" id="btn-morning">
+      <span class="icon">🌅</span> Morning Routine
+    </button>
+    <p style="font-size:9px;color:var(--muted);margin:0 0 8px 0">ATS + LinkedIn → score → inbox → actions</p>
     <button class="action-btn" onclick="doAction('scrape')" id="btn-scrape">
-      <span class="icon">🔍</span> Find Jobs (ATS)
+      <span class="icon">🔍</span> Find Jobs
     </button>
     <button class="action-btn" onclick="doAction('scrape-linkedin')" id="btn-linkedin">
       <span class="icon">💼</span> Find Jobs (LinkedIn)
     </button>
-    <button class="action-btn" onclick="doAction('score')" id="btn-score">
-      <span class="icon">🎯</span> Score Top 10
+    <button class="action-btn" onclick="doAction('scrape-bayt')" id="btn-bayt" style="color:var(--yellow);border-color:rgba(210,153,29,0.3)">
+      <span class="icon">🕌</span> Find Jobs (MENA — Bayt)
     </button>
+    <button class="action-btn" onclick="doAction('scrape-contract')" id="btn-contract">
+      <span class="icon">📋</span> Find Contract Jobs
+    </button>
+    <div style="display:flex;gap:4px;margin-bottom:6px">
+      <button class="action-btn" onclick="doAction('score')" id="btn-score" style="flex:1;margin-bottom:0">
+        <span class="icon">🎯</span> Score
+      </button>
+      <input type="number" id="scoreCount" value="10" min="1" max="100"
+        style="width:50px;background:var(--surface);border:1px solid var(--border);color:var(--text);border-radius:6px;padding:4px 6px;font-size:12px;text-align:center">
+    </div>
     <button class="action-btn" onclick="doAction('inbox')" id="btn-inbox">
       <span class="icon">📬</span> Check Inbox
     </button>
-    <button class="action-btn primary" onclick="doAction('workflow')" id="btn-workflow">
-      <span class="icon">⚡</span> Full Workflow
-    </button>
     <button class="action-btn warn" onclick="doAction('actions')" id="btn-actions">
       <span class="icon">📋</span> Daily Action List
+    </button>
+    <button class="action-btn" onclick="doAction('agencies')" id="btn-agencies">
+      <span class="icon">🏢</span> Upload to Agencies
     </button>
 
     <h3>Running</h3>
     <div id="running" style="font-size:11px;color:var(--muted)">Idle</div>
 
-    <h3 style="margin-top:16px">Pipeline</h3>
+    <h3 style="margin-top:16px">Recent Events</h3>
+    <div id="event-log" style="font-size:10px;color:var(--muted);max-height:150px;overflow-y:auto">
+      <span style="color:var(--border)">— none yet —</span>
+    </div>
+
+    <h3 style="margin-top:12px">Pipeline</h3>
     <div style="font-size:11px">
+      <div id="strict-indicator" style="display:flex;justify-content:space-between;padding:3px 6px;margin-bottom:4px;background:rgba(63,185,80,0.1);border:1px solid rgba(63,185,80,0.25);border-radius:4px;font-size:10px">
+        <span style="color:var(--green);font-weight:600">Strict filter: ON</span>
+        <span style="color:var(--green)" title="Excluding haram industries per scrape_config.json">&#10003;</span>
+      </div>
       <div style="display:flex;justify-content:space-between;padding:2px 0"><span>Total</span><b id="s-total">0</b></div>
       <div style="display:flex;justify-content:space-between;padding:2px 0"><span style="color:var(--green)">Strong matches</span><b id="s-strong">0</b></div>
       <div style="display:flex;justify-content:space-between;padding:2px 0"><span>Scored</span><b id="s-scored">0</b></div>
@@ -156,7 +288,7 @@
   </div>
 
   <!-- MAIN -->
-  <div>
+  <div class="main-content">
     <div class="stats" id="stats"></div>
 
     <div class="filters">
@@ -173,7 +305,7 @@
       <span class="count" id="count"></span>
     </div>
 
-    <div class="table-wrap">
+    <div class="table-wrap" id="tableWrap">
       <table>
         <thead>
           <tr>
@@ -189,10 +321,46 @@
       </table>
       <div class="empty" id="empty" style="display:none"><h3>No jobs yet</h3><p>Click "Find Jobs" in the sidebar</p></div>
     </div>
-    <p class="refresh" style="margin-top:8px;font-size:11px;color:var(--muted)">Click a row to expand &middot; Use sidebar to run actions &middot; Auto-refreshes every 15s</p>
+
+    <!-- Daily Actions Panel -->
+    <div class="panel" id="daily-panel">
+      <div class="panel-header">
+        <h2 id="daily-panel-title">Daily Action List</h2>
+        <button class="back-btn" onclick="hidePanels()">Back to jobs</button>
+      </div>
+      <div class="panel-body" id="daily-panel-body"></div>
+    </div>
+
+    <!-- Inbox Results Panel -->
+    <div class="panel" id="inbox-panel">
+      <div class="panel-header">
+        <h2 id="inbox-panel-title">Inbox</h2>
+        <button class="back-btn" onclick="hidePanels()">Back to jobs</button>
+      </div>
+      <div class="panel-body" id="inbox-panel-body"></div>
+    </div>
+
+    <!-- Agency Upload Panel -->
+    <div class="panel" id="agency-panel">
+      <div class="panel-header">
+        <h2>Agency CV Upload</h2>
+        <button class="back-btn" onclick="hidePanels()">Back to jobs</button>
+      </div>
+      <div class="panel-body" id="agency-panel-body"></div>
+    </div>
+
+    <p class="refresh" id="refreshHint" style="margin-top:8px;font-size:11px;color:var(--muted)">Click a row to expand &middot; Use sidebar to run actions &middot; Auto-refreshes every 15s</p>
   </div>
 </div>
 <div class="toast" id="toast" style="opacity:0"></div>
+<div class="log-popup-overlay" id="log-popup-overlay" onclick="closeLogPopup()">
+  <div class="log-popup" onclick="event.stopPropagation()">
+    <button class="close-btn" onclick="closeLogPopup()">&times;</button>
+    <h3 id="log-popup-title">Log</h3>
+    <div class="log-meta" id="log-popup-meta"></div>
+    <pre id="log-popup-body"></pre>
+  </div>
+</div>
 
 <script>
 let allJobs=[], currentStatus='all', currentSort='score', currentTab='perm', currentVerdict='', expanded=null;
@@ -215,8 +383,8 @@ function filterAndSort(){
   if (currentVerdict==='strong') j=j.filter(x=>x.score>=80);
   else if (currentVerdict==='good') j=j.filter(x=>x.score>=60);
   const q=(document.getElementById('search')?.value||'').toLowerCase();
-  if (q) j=j.filter(x=>(x.title+x.company+(x.location||'')).toLowerCase().includes(q));
-  if (currentSort==='score') j.sort((a,b)=>(b.score||0)-(a.score||0));
+  if (q) j=j.filter(x=>(x.title+x.company+(x.location||'')+(x.description||'')).toLowerCase().includes(q));
+  if (currentSort==='score') j.sort((a,b)=>(b.score||b.relevance||0)-(a.score||a.relevance||0));
   else if (currentSort==='date') j.sort((a,b)=>new Date(b.posted||0)-new Date(a.posted||0));
   else j.sort((a,b)=>(a.company||'').localeCompare(b.company||''));
   return j;
@@ -275,13 +443,23 @@ function renderTable(jobs){
     const rate=j.rate?` [${j.rate.currency||''}${j.rate.min||'?'}]`:'';
     const rf=j.scoring?.rate_fit?` | Rate:${j.scoring.rate_fit}`:'';
     const ir35=j.scoring?.ir35_note?` | IR35:${j.scoring.ir35_note}`:'';
+    // IR35 detection tags from contract_score.js
+    let ir35Tags='';
+    if (isC && j.ir35_status === 'outside') {
+      ir35Tags += `<span class="ir35-tag ir35-outside" title="Outside IR35 = You invoice through your limited company, more take-home pay, you are a genuine contractor">Outside IR35</span>`;
+    } else if (isC && j.ir35_status === 'inside') {
+      ir35Tags += `<span class="ir35-tag ir35-inside" title="Inside IR35 = Treated as an employee for tax, paid through umbrella company, less take-home">Inside IR35</span>`;
+    }
+    if (isC && j.rate_type === 'day') {
+      ir35Tags += `<span class="rate-type-tag" title="Day rate contract — paid per day rather than salary">Day Rate</span>`;
+    }
 
     return `
-    <tr id="row-${j.id}" onclick="toggleRow('${j.id}')" style="cursor:pointer">
+    <tr id="row-${j.id}" onclick="toggleRow('${j.id}',event)" style="cursor:pointer">
       <td><span class="score-badge ${sc}">${score}</span></td>
-      <td><span class="title-link">${esc(j.title)}</span><br><span class="verdict ${vClass}">${vLabel}${rf}${ir35}</span></td>
-      <td><span class="company">${esc(j.company)}</span>${rate}<br><span style="font-size:10px;color:var(--muted)">${esc(j.source)}</span></td>
-      <td><span class="location">${esc(j.location||'')}</span></td>
+      <td><span class="title-link" data-filter="role" data-filter-val="${esc(j.title)}">${esc(j.title)}</span><br><span class="verdict ${vClass}">${vLabel}${rf}${ir35}</span>${ir35Tags}</td>
+      <td><span class="company clickable-filter" data-filter="company" data-filter-val="${esc(j.company)}" title="Click to filter by company">${esc(j.company)}</span>${rate}<br><span style="font-size:10px;color:var(--muted)">${esc(j.source)}</span></td>
+      <td><span class="location clickable-filter" data-filter="location" data-filter-val="${esc(j.location||'')}" title="Click to filter by location">${esc(j.location||'')}</span></td>
       <td><span class="status-dot s-${ds}"></span>${statusLabel}<br><span style="font-size:10px;color:var(--muted)">${j.posted?daysAgo(j.posted):''}</span></td>
       <td class="actions" onclick="event.stopPropagation()">
         <a href="${j.url||'#'}" target="_blank">Open</a>
@@ -307,7 +485,9 @@ function renderTable(jobs){
   }).join('');
 }
 
-function toggleRow(id){
+function toggleRow(id, event){
+  if (event && event.target.closest('.clickable-filter')) return; // don't toggle when clicking filter
+  if (event && event.target.closest('.actions')) return; // don't toggle when clicking action links
   if(expanded===id){
     document.getElementById(`expand-${id}`)?.classList.remove('expanded');
     document.getElementById(`row-${id}`)?.classList.remove('expanded'); expanded=null;
@@ -321,18 +501,359 @@ function toggleRow(id){
 function esc(s){ return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
 function daysAgo(d){ if(!d)return''; const days=Math.round((Date.now()-new Date(d))/(86400000)); return days===0?'today':days===1?'1d ago':`${days}d ago`; }
 
+// ─── Panel visibility ────────────────────────────────────
+let currentPanel = null; // 'daily' | 'inbox' | 'agency' | null
+
+function showPanel(name) {
+  hidePanels(); // reset first
+  document.getElementById('tableWrap').style.display = 'none';
+  document.getElementById('refreshHint').style.display = 'none';
+  if (name === 'daily') {
+    document.getElementById('daily-panel').classList.add('visible');
+    currentPanel = 'daily';
+  } else if (name === 'inbox') {
+    document.getElementById('inbox-panel').classList.add('visible');
+    currentPanel = 'inbox';
+  } else if (name === 'agency') {
+    document.getElementById('agency-panel').classList.add('visible');
+    currentPanel = 'agency';
+  }
+}
+
+function hidePanels() {
+  document.getElementById('tableWrap').style.display = '';
+  document.getElementById('refreshHint').style.display = '';
+  document.getElementById('daily-panel').classList.remove('visible');
+  document.getElementById('inbox-panel').classList.remove('visible');
+  document.getElementById('agency-panel').classList.remove('visible');
+  currentPanel = null;
+  load();
+}
+
+// ─── Agency Upload Panel ─────────────────────────────────
+const AGENCIES = [
+  { id:'hays', name:'Hays Technology', url:'https://www.hays.co.uk/submit-cv', spec:'Enterprise IT contracts, public & private sector' },
+  { id:'experis', name:'Experis UK', url:'https://www.experis.co.uk/contact-us', spec:'Cloud, cybersecurity, enterprise apps' },
+  { id:'harveynash', name:'Harvey Nash', url:'https://www.harveynash.com/register', spec:'AI/Data engineering, digital transformation' },
+  { id:'harnham', name:'Harnham', url:'https://www.harnham.com/register', spec:'Data science, data engineering, AI specialist' },
+  { id:'lafosse', name:'La Fosse', url:'https://www.lafosse.com/register-cv', spec:'Technology, digital, executive' },
+  { id:'oliverbernard', name:'Oliver Bernard', url:'https://www.oliverbernard.com/candidates', spec:'Software engineering, platform, DevOps' },
+  { id:'understanding', name:'Understanding Recruitment', url:'https://www.understandingrecruitment.com/register', spec:'Software engineering, AI' },
+  { id:'roberthalf', name:'Robert Half Technology', url:'https://www.roberthalf.co.uk/submit-your-cv', spec:'General IT contracts' },
+  { id:'michaelpage', name:'Michael Page Technology', url:'https://www.michaelpage.co.uk/submit-cv', spec:'General IT contracts' },
+  { id:'spring', name:'Spring Technology', url:'https://www.springtechnology.co.uk/register', spec:'IT contractors specialist' },
+  { id:'venn', name:'Venn Group', url:'https://www.venngroup.com/register', spec:'Technology contractors, public sector' }
+];
+
+function getUploads() {
+  try { return JSON.parse(localStorage.getItem('agency_uploads') || '{}'); } catch { return {}; }
+}
+
+function saveUploads(uploads) {
+  localStorage.setItem('agency_uploads', JSON.stringify(uploads));
+}
+
+function renderAgencyPanel() {
+  const body = document.getElementById('agency-panel-body');
+  const uploads = getUploads();
+  const doneCount = AGENCIES.filter(a => uploads[a.id]).length;
+
+  let html = `<div class="summary-banner">Upload your CV to UK contractor agency databases. Open the link, register &amp; upload your CV, then check it off. <strong>${doneCount}/${AGENCIES.length}</strong> uploaded.</div>`;
+  html += `<div style="font-size:10px;color:var(--muted);margin-bottom:10px"><span style="color:var(--green);font-weight:600">Pro tip:</span> Most UK contract agencies expect you to be set up with a limited company. If you are outside IR35, mention it — agencies will prioritise your profile.</div>`;
+
+  for (const a of AGENCIES) {
+    const done = uploads[a.id] || false;
+    html += `<div class="agency-item">
+      <input type="checkbox" ${done ? 'checked' : ''} onchange="toggleAgency('${a.id}', this.checked)">
+      <div class="agency-info">
+        <div><span class="agency-name">${esc(a.name)}</span><span class="agency-status ${done ? 'ag-done' : 'ag-pending'}">${done ? 'Uploaded' : 'Pending'}</span></div>
+        <div class="agency-spec">${esc(a.spec)}</div>
+        <a href="${esc(a.url)}" target="_blank" class="agency-url">${esc(a.url)} &nearr;</a>
+      </div>
+    </div>`;
+  }
+
+  html += `<button class="action-btn primary" onclick="markAllAgencies()" style="margin-top:12px">Mark all uploaded</button>`;
+  body.innerHTML = html;
+}
+
+function toggleAgency(id, checked) {
+  const uploads = getUploads();
+  uploads[id] = checked;
+  saveUploads(uploads);
+  renderAgencyPanel();
+}
+
+function markAllAgencies() {
+  const uploads = {};
+  for (const a of AGENCIES) { uploads[a.id] = true; }
+  saveUploads(uploads);
+  renderAgencyPanel();
+  toast('All agencies marked as uploaded');
+}
+
+function showAgencyPanel() {
+  showPanel('agency');
+  renderAgencyPanel();
+}
+
+// ─── Render helpers ──────────────────────────────────────
+function priorityLabel(p) { return p === 'HIGH' ? 'prio-high' : p === 'MEDIUM' ? 'prio-med' : 'prio-low'; }
+function typeLabel(t) {
+  const m = { follow_up:'Follow-up', reply_needed:'Reply Needed', expiring:'Expiring Soon',
+    fresh_match:'New Match', close_out:'Close Out', rejection_acknowledged:'Rejection' };
+  return m[t] || t;
+}
+function classificationClass(c) {
+  const m = { interviewing:'ec-interviewing', offer:'ec-offer', screening:'ec-screening',
+    rejected:'ec-rejected', recruiter_outreach:'ec-recruiter_outreach' };
+  return m[c] || '';
+}
+function classificationLabel(c) {
+  const m = { interviewing:'Interview Invite', offer:'OFFER', screening:'Screening Call',
+    rejected:'Rejection', recruiter_outreach:'Recruiter Msg' };
+  return m[c] || c;
+}
+
+// ─── Render daily actions panel ──────────────────────────
+function renderDailyActions(data) {
+  const body = document.getElementById('daily-panel-body');
+  let html = '';
+
+  html += `<div class="summary-banner"><strong>${esc(data.summary || '')}</strong></div>`;
+
+  if (data.health) {
+    const h = data.health;
+    html += `<div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap;font-size:11px">
+      <span style="color:var(--muted)">Pipeline:</span>
+      <span><b>${h.total}</b> total</span>
+      <span style="color:var(--green)"><b>${h.strong}</b> strong</span>
+      <span style="color:var(--accent)"><b>${h.applied}</b> applied</span>
+      <span style="color:var(--purple)"><b>${h.active}</b> active</span>
+      ${h.strongUnapplied > 0 ? `<span style="color:var(--red)"><b>${h.strongUnapplied}</b> strong not applied!</span>` : ''}
+    </div>`;
+  }
+
+  if (data.inboxCount !== undefined) {
+    html += `<div style="font-size:11px;color:var(--muted);margin-bottom:8px">
+      Inbox: ${data.inboxCount} recruiter emails from last scan ·
+      <a href="#" onclick="showInboxPanel();return false" style="color:var(--accent)">View inbox</a>
+    </div>`;
+  }
+
+  if (!data.actions || !data.actions.length) {
+    html += '<p style="color:var(--muted);padding:20px 0">Nothing to do today. Run "Find Jobs" and "Score" to build your pipeline.</p>';
+    body.innerHTML = html;
+    return;
+  }
+
+  const groups = { HIGH: [], MEDIUM: [], LOW: [] };
+  for (const a of data.actions) {
+    (groups[a.priority] = groups[a.priority] || []).push(a);
+  }
+  const labels = { HIGH: 'URGENT — Do Today', MEDIUM: 'This Week', LOW: 'Housekeeping' };
+
+  for (const [level, label] of [['HIGH', labels.HIGH], ['MEDIUM', labels.MEDIUM], ['LOW', labels.LOW]]) {
+    const items = groups[level] || [];
+    if (!items.length) continue;
+    html += `<div class="section-head">${label} <span class="count-num">(${items.length})</span></div>`;
+    for (const a of items) {
+      html += `<div class="action-card">
+        <div>
+          <span class="prio-badge ${priorityLabel(a.priority)}">${a.priority}</span>
+          <span style="font-size:10px;color:var(--muted)">${typeLabel(a.type)}</span>
+        </div>
+        <div class="action-title">${esc(a.title)}</div>
+        ${a.detail ? `<div class="action-detail">${esc(a.detail)}</div>` : ''}
+        ${a.suggested ? `<div class="action-suggest">${esc(a.suggested)}</div>` : ''}
+        ${a.jobScore ? `<div class="action-meta">Score: <b>${a.jobScore}/100</b> | ${esc(a.jobCompany||'')} | ${esc(a.jobStatus||'')}</div>` : ''}
+        ${a.jobUrl ? `<div class="action-meta"><a href="${esc(a.jobUrl)}" target="_blank">Open job</a></div>` : ''}
+      </div>`;
+    }
+  }
+
+  body.innerHTML = html;
+}
+
+async function loadDailyActions() {
+  toast('Loading daily action list...');
+  showPanel('daily');
+  const body = document.getElementById('daily-panel-body');
+  body.innerHTML = '<p style="color:var(--muted);padding:20px 0">Generating action list...</p>';
+  try {
+    const data = await api('/api/actions');
+    document.getElementById('daily-panel-title').textContent = 'Daily Action List — ' + (data.dateFormatted || '');
+    renderDailyActions(data);
+    toast(`Loaded: ${data.totalActions || 0} actions`);
+  } catch (e) {
+    body.innerHTML = '<p style="color:var(--red)">Failed to load action list. Is the server running?</p>';
+    toast('Error loading actions');
+  }
+}
+
+// ─── Render inbox results panel ──────────────────────────
+function getSuggestedInboxAction(email) {
+  const c = email.classification || '';
+  if (c === 'interviewing' || c === 'offer') return 'Reply within 24h — confirm availability and schedule.';
+  if (c === 'screening') return 'Reply within 48h — schedule the introductory call.';
+  if (c === 'recruiter_outreach') return 'Review and respond within 3 days if interested.';
+  if (c === 'rejected') return 'No action needed. Pipeline has been updated.';
+  return '';
+}
+
+function renderInboxResults(data) {
+  const body = document.getElementById('inbox-panel-body');
+  const title = document.getElementById('inbox-panel-title');
+
+  let scannedInfo = '';
+  if (data.scannedAt) {
+    const dt = new Date(data.scannedAt);
+    const ago = Math.round((Date.now() - dt.getTime()) / 60000);
+    scannedInfo = `Last scan: ${ago < 1 ? 'just now' : ago < 60 ? ago + 'm ago' : Math.round(ago/60) + 'h ago'} (${data.days}d range)`;
+  }
+  title.textContent = 'Inbox' + (scannedInfo ? ' — ' + scannedInfo : '');
+
+  let html = '';
+
+  if (!data.emails || !data.emails.length) {
+    html += `<p style="color:var(--muted);padding:20px 0">${data.message || 'No recruiter emails found in the scanned period.'}</p>`;
+    if (scannedInfo) html += `<p style="font-size:11px;color:var(--muted)">${scannedInfo}</p>`;
+    body.innerHTML = html;
+    return;
+  }
+
+  html += `<div class="summary-banner">Found <strong>${data.totalFound}</strong> recruiter emails ${scannedInfo ? '(' + scannedInfo + ')' : ''}</div>`;
+
+  const groups = {};
+  for (const e of data.emails) {
+    const c = e.classification || 'other';
+    (groups[c] = groups[c] || []).push(e);
+  }
+
+  const groupOrder = [
+    { key: 'offer', label: 'OFFERS' },
+    { key: 'interviewing', label: 'INTERVIEW INVITES' },
+    { key: 'screening', label: 'SCREENING / RECRUITER CALLS' },
+    { key: 'recruiter_outreach', label: 'RECRUITER OUTREACH' },
+    { key: 'rejected', label: 'REJECTIONS' },
+  ];
+
+  for (const g of groupOrder) {
+    const items = groups[g.key] || [];
+    if (!items.length) continue;
+    html += `<div class="section-head">${g.label} <span class="count-num">(${items.length})</span></div>`;
+    for (const e of items) {
+      html += `<div class="email-card">
+        <div class="email-subject">${esc(e.subject || '(no subject)')}</div>
+        <div class="email-from">From: ${esc(e.from || '')}</div>
+        <div class="email-meta">
+          <span class="email-class ${classificationClass(e.classification)}">${classificationLabel(e.classification)}</span>
+          ${e.company ? `<span style="font-size:10px;color:var(--yellow)">${esc(e.company)}</span>` : ''}
+          ${e.matched_job_title ? `<span class="email-matched">Matched: ${esc(e.matched_job_title)}</span>` : ''}
+          ${e.date ? `<span class="email-date">${esc(e.date)}</span>` : ''}
+        </div>
+        ${getSuggestedInboxAction(e) ? `<div class="suggested-action">${getSuggestedInboxAction(e)}</div>` : ''}
+      </div>`;
+    }
+  }
+
+  body.innerHTML = html;
+}
+
+async function showInboxPanel() {
+  showPanel('inbox');
+  const body = document.getElementById('inbox-panel-body');
+  body.innerHTML = '<p style="color:var(--muted);padding:20px 0">Loading inbox results...</p>';
+  try {
+    const data = await api('/api/inbox-results');
+    renderInboxResults(data);
+  } catch (e) {
+    body.innerHTML = '<p style="color:var(--red)">Failed to load inbox results.</p>';
+  }
+}
+
+async function scanInboxAndShow() {
+  toast('Scanning inbox...');
+  let scanId;
+  try {
+    const r = await api('/api/action/inbox?days=7');
+    scanId = r.id;
+    pollRunning();
+  } catch (e) { toast('Error: ' + e.message); return; }
+
+  showPanel('inbox');
+  const body = document.getElementById('inbox-panel-body');
+  body.innerHTML = '<div class="inbox-scan-status"><span class="spinner" style="display:inline-block;width:10px;height:10px;border-radius:50%;background:var(--accent);animation:pulse 1s infinite;margin-right:8px"></span>Scanning inbox... (may take 30-60s)</div>';
+
+  let tries = 0;
+  const check = setInterval(async () => {
+    tries++;
+    try {
+      const running = await api('/api/running');
+      const job = running.find(x => x.id === scanId);
+      if (!job || job.status === 'done' || job.status === 'error') {
+        clearInterval(check);
+        if (job && job.status === 'done') {
+          toast('Inbox scan complete');
+          const data = await api('/api/inbox-results');
+          renderInboxResults(data);
+          load();
+        } else {
+          body.innerHTML = '<p style="color:var(--red)">Inbox scan failed. Check email_config.json and Gmail App Password.</p>';
+          toast('Inbox scan failed');
+        }
+      } else if (tries % 5 === 0) {
+        const elapsed = Math.round((Date.now() - job.started) / 1000);
+        body.innerHTML = `<div class="inbox-scan-status"><span class="spinner" style="display:inline-block;width:10px;height:10px;border-radius:50%;background:var(--accent);animation:pulse 1s infinite;margin-right:8px"></span>Scanning inbox... (${elapsed}s elapsed)</div>`;
+      }
+    } catch (e) { /* keep polling */ }
+  }, 2000);
+  setTimeout(() => { clearInterval(check); }, 120000);
+}
+
 // ─── Actions ────────────────────────────────────────────
 async function doAction(type){
   const isC=currentTab==='contract';
   const pipeline=isC?'contract':'perm';
   let url,msg;
   switch(type){
-    case 'scrape': url=`/api/action/scrape?pipeline=${pipeline}&source=ats`; msg=`Finding ${pipeline} jobs via ATS...`; break;
+    case 'scrape': url=`/api/action/scrape?pipeline=${pipeline}&source=ats`; msg=`Finding jobs (ATS + LinkedIn + Himalayas)...`; break;
+	    case 'scrape-bayt': url=`/api/action/scrape?pipeline=perm&source=bayt`; msg='Finding MENA jobs (Bayt)...'; break;
     case 'scrape-linkedin': url=`/api/action/scrape?pipeline=perm&source=linkedin`; msg='Finding LinkedIn jobs...'; break;
-    case 'score': url=`/api/action/score?pipeline=${pipeline}&count=10`; msg='Scoring top 10...'; break;
-    case 'inbox': url=`/api/action/inbox?days=7`; msg='Checking inbox...'; break;
-    case 'workflow': url=`/api/action/workflow?pipeline=${pipeline}`; msg=`Workflow: find → score → tailor top 3`; break;
-    case 'actions': toast('Loading daily action list...'); window.open('/api/actions','_blank'); return;
+    case 'scrape-contract': url=`/api/action/scrape?pipeline=contract&source=all`; msg='Finding contract jobs...'; break;
+    case 'score':
+      const cnt = document.getElementById('scoreCount')?.value || 10;
+      url = `/api/action/score?pipeline=${pipeline}&count=${cnt}`;
+      msg = `Scoring top ${cnt}...`;
+      break;
+    case 'actions': loadDailyActions(); return;
+    case 'agencies': showAgencyPanel(); return;
+    case 'morning':
+      toast('Morning routine: find → score → inbox → actions (started)');
+      try {
+        const mr = await api('/api/action/morning');
+        const morningId = mr.id;
+        pollRunning();
+        // Watch for completion
+        const morningCheck = setInterval(async () => {
+          try {
+            const rlist = await api('/api/running');
+            const job = rlist.find(x => x.id === morningId);
+            if (!job || job.status === 'done' || job.status === 'error') {
+              clearInterval(morningCheck);
+              if (job && job.status === 'done') {
+                toast('Morning routine complete!');
+                loadDailyActions();
+              } else {
+                toast('Morning routine ' + (job ? job.status : 'lost'));
+              }
+              load();
+            }
+          } catch(e) { /* keep polling */ }
+        }, 3000);
+        setTimeout(() => clearInterval(morningCheck), 600000);
+      } catch(e) { toast('Error: ' + e.message); }
+      return;
   }
   toast(msg+' (started)');
   try{
@@ -386,16 +907,54 @@ async function tailorOne(id){
 }
 
 async function autoApplyOne(id){
-  toast('Opening auto-apply browser...');
   try{
-    // For LinkedIn jobs, guide to use job-apply-plugin
     if(id.startsWith('li_')){
-      toast('LinkedIn job: use /job-apply:job-apply in Claude Code');
+      toast('LinkedIn job: use /job-apply:job-apply in Claude Code chat');
       return;
     }
-    const r=await api(`/api/action/auto-apply?id=${id}`);
-    toast('Auto-apply started — check your browser window');
+    // Check if job has been scored and tailored — if not, do it now
+    const job = allJobs.find(j => j.id === id);
+    if (!job || !job.score) {
+      toast('Scoring job first...');
+      await scoreOneSync(id);
+      load(); // reload data to get fresh score
+    }
+    // Always tailor before auto-apply (ensures materials exist)
+    toast('Generating materials, then opening browser...');
+    const tR = await api(`/api/action/tailor?id=${id}&pipeline=perm`);
+    // Poll for tailor completion, then auto-apply
+    let tries = 0;
+    const check = setInterval(async () => {
+      tries++;
+      const rlist = await api('/api/running');
+      const job = rlist.find(x => x.id === tR.id);
+      if (!job || job.status !== 'running') {
+        clearInterval(check);
+        if (job?.status === 'done' || !job) {
+          const r = await api(`/api/action/auto-apply?id=${id}`);
+          toast('Auto-apply browser opening...');
+        } else {
+          toast('Tailoring failed — cannot auto-apply');
+        }
+      }
+    }, 2000);
+    setTimeout(() => clearInterval(check), 180000);
   }catch(e){ toast('Error: '+e.message); }
+}
+
+async function scoreOneSync(id){
+  return new Promise((resolve) => {
+    api(`/api/action/score-one?id=${id}`).then(r => {
+      let tries = 0;
+      const check = setInterval(async () => {
+        tries++;
+        const rlist = await api('/api/running');
+        const job = rlist.find(x => x.id === r.id);
+        if (!job || job.status !== 'running') { clearInterval(check); resolve(job); }
+      }, 2000);
+      setTimeout(() => { clearInterval(check); resolve(null); }, 120000);
+    });
+  });
 }
 
 async function applyOne(id){
@@ -421,36 +980,166 @@ async function applyOne(id){
   }catch(e){ toast('Error: '+e.message); }
 }
 
+async function cancelJob(rid) {
+  try {
+    await api(`/api/action/cancel?id=${rid}`);
+    toast('Job cancelled');
+  } catch(e) { toast('Error: '+e.message); }
+}
+
+async function cancelAll(ids) {
+  for (const id of ids) {
+    try { await api(`/api/action/cancel?id=${id}`); } catch {}
+  }
+  toast(`${ids.length} jobs cancelled`);
+}
+
+// ─── Log popup ───────────────────────────────────────────
+function openLogPopup(rid) {
+  const d = runningLogs.get(rid);
+  if (!d) return;
+  document.getElementById('log-popup-title').textContent = d.type;
+  document.getElementById('log-popup-meta').textContent = `Run ${rid} — ${d.elapsed}s elapsed`;
+  document.getElementById('log-popup-body').textContent = d.log || '(no output yet)';
+  document.getElementById('log-popup-overlay').classList.add('show');
+}
+function closeLogPopup() {
+  document.getElementById('log-popup-overlay').classList.remove('show');
+}
+document.addEventListener('keydown', e => { if (e.key === 'Escape') closeLogPopup(); });
+
+// ─── Event log & notifications ──────────────────────────
+const eventLog = [];
+const MAX_EVENTS = 50;
+let notifiedJobs = new Set();
+// Periodically clean old notified entries to prevent memory growth
+setInterval(() => { if (notifiedJobs.size > 100) notifiedJobs = new Set([...notifiedJobs].slice(-50)); }, 60000);
+
+function requestNotifyPermission() {
+  if ('Notification' in window && Notification.permission === 'default') {
+    Notification.requestPermission();
+  }
+}
+document.addEventListener('click', requestNotifyPermission, {once:true});
+
+function notify(title, body, icon) {
+  if ('Notification' in window && Notification.permission === 'granted') {
+    try { new Notification(title, { body, icon: icon || '📋', silent: false }); } catch {}
+  }
+}
+
+function addEvent(type, status, detail) {
+  const now = new Date();
+  const time = now.toLocaleTimeString('en-GB', {hour:'2-digit',minute:'2-digit'});
+  eventLog.unshift({ type, status, detail, time, ts: now.getTime() });
+  if (eventLog.length > MAX_EVENTS) eventLog.length = MAX_EVENTS;
+  renderEventLog();
+}
+
+function renderEventLog() {
+  const div = document.getElementById('event-log');
+  if (!div) return;
+  if (!eventLog.length) {
+    div.innerHTML = '<span style="color:var(--border)">— none yet —</span>';
+    return;
+  }
+  const recent = eventLog.slice(0, 10);
+  div.innerHTML = recent.map(e => {
+    const color = e.status === 'done' ? 'var(--green)' : e.status === 'error' ? 'var(--red)' : e.status === 'cancelled' ? 'var(--yellow)' : 'var(--accent)';
+    const icon = e.status === 'done' ? '✓' : e.status === 'error' ? '✗' : e.status === 'cancelled' ? '◼' : '●';
+    return `<div style="padding:2px 0;border-bottom:1px solid var(--border);display:flex;gap:6px">
+      <span style="color:${color};flex-shrink:0">${icon}</span>
+      <span style="flex:1">${esc(e.detail)}</span>
+      <span style="color:var(--border);flex-shrink:0;font-size:9px">${e.time}</span>
+    </div>`;
+  }).join('');
+}
+
 // ─── Running jobs poll ──────────────────────────────────
+const runningLogs = new Map();
+
 async function pollRunning(){
   try{
     const list=await api('/api/running');
     const active=list.filter(x=>x.status==='running');
-    const justDone=list.filter(x=>x.status!=='running'&&x.ended&&x.ended>Date.now()-30000);
+    const justDone=list.filter(x=>x.status!=='running'&&x.ended&&x.ended>Date.now()-120000);
     const div=document.getElementById('running');
     if(!active.length && !justDone.length){ div.innerHTML='<span style="color:var(--muted)">Idle</span>'; } else {
-      let html='';
+      let items=[];
       for(const r of active){
         const elapsed=Math.round((Date.now()-r.started)/1000);
         const log=r.log||'';
-        const logLines=log.split('\n').filter(l=>l.trim()).slice(-6);
-        html+=`<div class="running-item">
-          <span class="spinner" style="background:var(--accent)"></span><b>${r.type}</b> (${r.pipeline}) — ${elapsed}s
-          ${logLines.length?`<pre style="font-size:10px;color:var(--muted);margin:4px 0 0 12px;white-space:pre-wrap;max-height:120px;overflow-y:hidden">${logLines.join('\n')}</pre>`:''}
-        </div>`;
+        runningLogs.set(r.id, {type:r.type, log, elapsed});
+        const logLines=log.split('\n').filter(l=>l.trim()).slice(-3);
+        const logHtml=logLines.length
+          ? `<pre class="log-pre" onclick="event.stopPropagation();openLogPopup('${r.id}')">${logLines.join('\n')}<div class="log-hint">click for full log</div></pre>`
+          : '';
+        if (r.type === 'morning') {
+          items.push(`<div class="running-item" style="border-color:rgba(240,136,62,0.3)">
+            <span class="spinner" style="background:var(--orange)"></span><b>Morning Routine</b> — ${elapsed}s
+            <a href="#" onclick="event.stopPropagation();cancelJob('${r.id}')" style="color:var(--red);font-size:11px;margin-left:8px;cursor:pointer;text-decoration:none" title="Stop">✕</a>
+            <div style="font-size:11px;color:var(--orange);margin-top:2px">Step ${r.step||'?'}/${r.totalSteps||4}: ${r.stepLabel||'Running...'}</div>
+            ${logHtml}
+          </div>`);
+        } else {
+          items.push(`<div class="running-item">
+            <span class="spinner" style="background:var(--accent)"></span><b>${r.type}</b> (${r.pipeline}) — ${elapsed}s
+            <a href="#" onclick="event.stopPropagation();cancelJob('${r.id}')" style="color:var(--red);font-size:11px;margin-left:8px;cursor:pointer;text-decoration:none" title="Stop">✕</a>
+            ${logHtml}
+          </div>`);
+        }
       }
       for(const r of justDone){
-        html+=`<div class="running-item">
-          <span style="color:${r.status==='done'?'var(--green)':'var(--red)'}">${r.status==='done'?'OK':'FAIL'}</span> <b>${r.type}</b> — ${Math.round((r.ended-r.started)/1000)}s
-        </div>`;
+        const label = r.type === 'morning' ? 'Morning Routine' : r.type;
+        const ok = r.status === 'done';
+        const dur = Math.round((r.ended-r.started)/1000);
+        // Show last error lines for failed/cancelled jobs
+        const errLines = !ok && r.log ? r.log.split('\n').filter(l=>l.trim()).slice(-2) : [];
+        const errHtml = errLines.length ? `<div style="font-size:9px;color:var(--red);margin-top:2px;white-space:pre-wrap">${esc(errLines.join('\n'))}</div>` : '';
+        items.push(`<div class="running-item"${ok?'':r.status==='cancelled'?' style="border-color:var(--yellow)"':' style="border-color:var(--red)"'}>
+          <span style="color:${ok?'var(--green)':r.status==='cancelled'?'var(--yellow)':'var(--red)'}">${ok?'OK':r.status==='cancelled'?'CANCELLED':'FAIL'}</span> <b>${label}</b> — ${dur}s
+          ${errHtml}
+          ${!ok?`<div style="font-size:9px;color:var(--accent);margin-top:2px;cursor:pointer" onclick="event.stopPropagation();openLogPopup('${r.id}')">click for full log →</div>`:''}
+        </div>`);
+        if (!notifiedJobs.has(r.id)) {
+          notifiedJobs.add(r.id);
+          const detail = ok ? `${label} done (${dur}s)` : r.status==='cancelled' ? `${label} cancelled` : `${label} FAILED: ${errLines[0]||'unknown error'}`;
+          addEvent(r.type, ok?'done':'error', detail);
+          if (!ok) toast(detail, 8000);
+        }
+        // Cleanup old entries from notified set
+        if (notifiedJobs.size > 100) notifiedJobs = new Set([...notifiedJobs].slice(-50));
       }
-      div.innerHTML=html;
+      let activeIDs = active.map(r => r.id);
+      if(items.length>3){
+        const visible=items.slice(0,3).join('');
+        const hidden=items.slice(3).join('');
+        div.innerHTML=visible+
+          (active.length>2 ? `<div class="running-toggle" style="color:var(--red);margin-top:4px" onclick="cancelAll(${JSON.stringify(activeIDs)})">Cancel all running</div>` : '')+
+          `<div class="running-toggle" onclick="var h=document.getElementById('running-hidden-extra');h.style.display='';this.style.display='none'">+ ${items.length-3} more</div>`+
+          `<div id="running-hidden-extra" style="display:none">${hidden}</div>`;
+      } else {
+        div.innerHTML=items.join('')+
+          (active.length>2 ? `<div class="running-toggle" style="color:var(--red);margin-top:4px" onclick="cancelAll(${JSON.stringify(activeIDs)})">Cancel all running</div>` : '');
+      }
     }
     // Auto-reload data if there are running jobs or just finished
     if(active.length||justDone.length) load();
   }catch{}
   setTimeout(pollRunning,3000);
 }
+
+// ─── Quick filter (click company/location/role in table) ──
+document.addEventListener('click', function(e) {
+  const el = e.target.closest('.clickable-filter');
+  if (!el) return;
+  e.stopPropagation();
+  const val = el.dataset.filterVal || '';
+  if (!val.trim()) return;
+  document.getElementById('search').value = val;
+  expanded = null;
+  renderTable(filterAndSort());
+});
 
 // ─── Event bindings ─────────────────────────────────────
 document.getElementById('search').addEventListener('input',()=>{expanded=null;renderTable(filterAndSort())});
@@ -469,8 +1158,43 @@ document.querySelectorAll('th[data-sort]').forEach(th=>th.addEventListener('clic
   currentSort=th.dataset.sort; expanded=null; renderTable(filterAndSort());
 }));
 
+// ─── Morning prompt check ─────────────────────────────────
+async function checkMorningPrompt() {
+  try {
+    const r = await api('/api/actions/last-run');
+    const prompt = document.getElementById('morning-prompt');
+    if (!r.lastRun) { prompt.style.display = ''; return; }
+    const lastRun = new Date(r.lastRun);
+    const today = new Date();
+    if (lastRun.toDateString() !== today.toDateString()) {
+      prompt.style.display = '';
+    }
+  } catch(e) { /* ignore — server may not be ready yet */ }
+}
+
+// ─── Strict filter indicator ─────────────────────────────
+async function checkStrictFilter() {
+  try {
+    const cfg = await api('/api/config');
+    const sf = cfg.strict_filter || {};
+    const el = document.getElementById('strict-indicator');
+    if (!el) return;
+    if (sf.strict_mode) {
+      el.innerHTML = `<span style="color:var(--green);font-weight:600">Strict filter: ON</span>
+        <span style="color:var(--green)" title="Excluding restricted industries per scrape_config.json">&#10003;</span>`;
+      el.style.background = 'rgba(63,185,80,0.1)';
+      el.style.borderColor = 'rgba(63,185,80,0.25)';
+    } else {
+      el.innerHTML = `<span style="color:var(--muted);font-weight:600">Strict filter: OFF</span>
+        <span style="color:var(--muted)" title="Strict mode is disabled">&#10007;</span>`;
+      el.style.background = 'rgba(139,148,158,0.08)';
+      el.style.borderColor = 'rgba(139,148,158,0.2)';
+    }
+  } catch(e) { /* ignore — server may not be ready */ }
+}
+
 // Init
-load(); pollRunning();
+load(); pollRunning(); checkMorningPrompt(); checkStrictFilter(); requestNotifyPermission();
 // Auto-refresh data every 30s
 setInterval(load,30000);
 </script>

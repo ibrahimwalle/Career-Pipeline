@@ -271,22 +271,22 @@ def scan_inbox(days=14):
             # Extract company
             company = extract_company_from_email(from_addr, subject, body)
 
-            # --- PIPELINE-ONLY FILTER ---
-            if scan_mode == 'pipeline_only':
-                matched_in_pipeline = False
-                text_lower = f"{subject} {body[:1000]}".lower()
+            # --- COMPANY FILTER ---
+            matched_in_pipeline = False
+            text_lower = f"{subject} {body[:1000]}".lower()
 
-                for pc in pipeline_companies:
-                    if pc in text_lower:
-                        matched_in_pipeline = True
-                        if not company:
-                            company = pc
-                        break
+            for pc in pipeline_companies:
+                if pc in text_lower:
+                    matched_in_pipeline = True
+                    if not company:
+                        company = pc
+                    break
 
-                if not matched_in_pipeline:
-                    from_lower = from_addr.lower()
-                    if not any(domain in from_lower for domain in RECRUITER_DOMAINS):
-                        continue
+            if not matched_in_pipeline and scan_mode == 'pipeline_only':
+                # Pipeline-only: skip non-pipeline emails unless from ATS domains
+                from_lower = from_addr.lower()
+                if not any(domain in from_lower for domain in RECRUITER_DOMAINS):
+                    continue
 
             # Try to match to pipeline
             matched_job = None
@@ -448,5 +448,29 @@ def scan_inbox(days=14):
 
 
 if __name__ == '__main__':
-    days = int(sys.argv[1]) if len(sys.argv) > 1 else 14
-    scan_inbox(days)
+    days = 14
+    json_output = False
+    for arg in sys.argv[1:]:
+        if arg == '--json':
+            json_output = True
+        else:
+            try:
+                days = int(arg)
+            except ValueError:
+                pass
+
+    results = scan_inbox(days) or []
+
+    if json_output:
+        # Write structured results for dashboard consumption
+        os.makedirs(DATA_DIR, exist_ok=True)
+        output = {
+            'scannedAt': datetime.now(timezone.utc).isoformat(),
+            'days': days,
+            'totalFound': len(results),
+            'emails': results
+        }
+        with open(os.path.join(DATA_DIR, 'inbox_results.json'), 'w', encoding='utf-8') as f:
+            json.dump(output, f, indent=2, ensure_ascii=False, default=str)
+        print('\n[JSON_OUTPUT]')
+        print(json.dumps(output, indent=2, ensure_ascii=False, default=str))

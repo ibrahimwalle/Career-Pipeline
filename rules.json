@@ -13,8 +13,8 @@
       "_note": "Agent may NOT delete, archive, move, mark-as-read, or modify any email without explicit per-action approval. If an action would change inbox state, it MUST ask first."
     },
     "scan_filter": {
-      "mode": "pipeline_only",
-      "_note": "Only scan for emails matching companies in companies.json. Skip personal emails, newsletters, and anything unrelated to job applications."
+      "mode": "all_recruiter",
+      "_note": "Scan for any recruiter-like email (ATS domains, interview/rejection/offer keywords). Non-pipeline companies are shown in actions but don't auto-update pipeline statuses."
     }
   },
 

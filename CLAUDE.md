@@ -4,93 +4,104 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Overview
 
-Job search automation pipeline covering permanent and contract roles. **The dashboard is the interface** — all scraping, scoring, tailoring, applying, and inbox scanning runs through the web UI at `http://localhost:3456`. Scripts are backend workers the dashboard spawns.
+Job search automation pipeline for permanent and contract roles. **The dashboard is the interface** — all scraping, scoring, tailoring, inbox scanning, and daily actions run through the web UI at `http://localhost:3456`. Scripts are backend workers the dashboard spawns via `spawn()`.
 
-Two parallel pipelines sharing the same dashboard:
+## The user runs ONE command
+
+```bash
+npm run dev    # http://localhost:3456 — hot reload via nodemon
+```
+
+Everything is buttons. Morning Routine chains all sources → score → inbox → actions.
+
+## Pipeline architecture
 
 | | Permanent | Contract |
 |---|---|---|
 | Job store | `data/jobs.json` | `data/contract_jobs.json` |
-| Sources | Greenhouse, Lever, Ashby, LinkedIn | RemoteOK, WeWorkRemotely |
+| Sources | Greenhouse, Lever, Ashby, LinkedIn, SmartRecruiters, Remotive, Arbeitnow, Himalayas, Bayt.com | DevITjobs UK, RemoteOK, WeWorkRemotely, LinkedIn Contract, Hacker News |
 | Scorer | `score.js` | `contract_score.js` |
 | Tailor | `tailor.js` (cover letter + CV) | `contract_tailor.js` (pitch + rate justification) |
 | Verdicts | STRONG_MATCH / GOOD_FIT / REACH / SKIP | BID / APPLY / REACH / SKIP |
 | Profile | `profile/master_doc.md` + `profile/cv.md` | `profile/contract_profile.json` + `profile/contract_cv.md` |
 | Auto-apply | `auto_apply.js` (Playwright) + LinkedIn via `job-apply-plugin` | Manual (paste pitch into platform) |
 
-Contract rates are set competitively for first-time contracting: £250-350/day (below market to land first gig). Profile files are gitignored — copy `.example` files to set up.
-
-## The user runs ONE command
-
-```bash
-node src/dashboard.js    # http://localhost:3456
-```
-
-Everything else is buttons in the sidebar: Find Jobs (ATS), Find Jobs (LinkedIn), Score, Check Inbox, Full Workflow, Daily Actions, Auto-Apply.
-
-## Architecture
-
-### Data contract (jobs.json / contract_jobs.json)
-
-Every job: `id`, `source`, `company`, `title`, `location`, `url`, `description`, `status`, `score`, `verdict`, `scoring` (nested: strengths, gaps, reasoning). Contract jobs add `rate` and `scoring.rate_fit`, `scoring.ir35_note`.
-
 **Status flow:** `new` → `scored` → `applied`/`bid` → `screening`/`client_call` → `interviewing` → `offer`/`won` / `rejected`/`lost`
 
-### ATS sources (find.js)
+Every job object: `id` (prefixed by source), `source`, `company`, `title`, `location`, `url`, `description`, `status`, `score`, `verdict`, `relevance` (pre-rank), `scoring` (nested: strengths, gaps, reasoning, rate_fit, ir35_note).
 
-- Greenhouse: `boards-api.greenhouse.io/v1/boards/<slug>/jobs?content=true`
-- Lever: `api.lever.co/v0/postings/<slug>?mode=json`
-- Ashby: `api.ashbyhq.com/posting-api/job-board/<slug>?includeCompensation=true`
+## Pre-rank system (shared.js)
 
-### LinkedIn (linkedin_find.js)
+Before Claude scores, every scraper computes a `relevance` score (0-100) based on:
+- Role keyword hits (+0 to +25)
+- Title quality: senior/lead +15, junior-adjacent -5
+- Location tier: UK +15, Lebanon +14, Europe +12, Gulf +10, remote +5
+- Freshness: <7 days +10, <14 days +5, >30 days -5
+- Company stage: startups +8, scaleups +5, big tech +2
+- Preferred sector match +5
 
-Playwright with persistent browser profile at `data/linkedin_profile/`. Searches with `f_WT=2` (Remote), `f_TPR=r2592000` (past 30 days). Uses resilient selectors with 4-7 fallbacks per field. Respects `scrape_config.json` filters.
+Jobs are sorted by relevance before Claude scoring. The dashboard sorts by `score || relevance` so unscored jobs still appear ranked.
 
-### Contract sources (contract_find.js)
+## All scrapers
 
-RemoteOK free JSON API, WeWorkRemotely RSS. Other sources (Arc.dev, WorkingNomads, Contra) have broken APIs — update endpoints if resurrecting.
+| File | Sources | Method | Notes |
+|---|---|---|---|
+| `find.js` | 51 companies (Greenhouse/Lever/Ashby) | HTTP to public APIs | 10 jobs/company cap, newest first |
+| `linkedin_find.js` | LinkedIn Jobs | Playwright, persistent profile `data/linkedin_profile/` | `isInteractive()` guard prevents stdin hang when spawned from dashboard |
+| `himalayas_find.js` | Himalayas.app | Free public API | 40 queries, 4 parallel batches |
+| `smartrecruiters_find.js` | 11 companies (SmartRecruiters API) | HTTP to partner API | |
+| `remotive_find.js` | Remotive + Arbeitnow | Free JSON APIs | |
+| `bayt_find.js` | Bayt.com (MENA #1 board) | Playwright, same persistent profile | 7 Gulf countries + Lebanon |
+| `contract_find.js` | RemoteOK, WeWorkRemotely | HTTP (JSON, RSS) | |
+| `devitjobs_find.js` | DevITjobs UK | XML feed | 409 UK contract jobs |
+| `linkedin_contract_find.js` | LinkedIn contract jobs | Playwright | |
+| `hn_contract_find.js` | Hacker News freelancer threads | Algolia API | |
 
-### Claude Code integration (score.js, tailor.js, etc.)
+All scrapers import from `shared.js` (`computeRelevance`, `loadScrapeConfig`, `DAY_MS`). All apply filters from `scrape_config.json`: role_keywords, exclude_roles, locations, remote_preference, max_job_age_days, max_jobs_per_company, strict_filter.
 
-All LLM scripts: write prompt → `claude --print --output-format text --dangerously-skip-permissions -p "$(cat file)"` via execSync → parse JSON from response. Score timeout: 60s. Tailor timeout: 120s. Uses user's Claude subscription, not API key.
+## Claude Code integration
 
-### Web dashboard (dashboard.js + dashboard.html)
+All LLM scripts use `spawnSync` (not `execSync` — crashes on timeouts):
 
-Pure Node.js HTTP on port 3456. Self-contained SPA (inline CSS/JS). Sidebar action buttons trigger `/api/action/*` endpoints which spawn scripts as child processes. Running jobs tracked in-memory with live log streaming. Client polls `/api/running` every 3s for progress.
+```js
+const result = spawnSync('claude', ['--print', '--output-format', 'text', '--dangerously-skip-permissions'], {
+  cwd: ROOT, timeout: 120000, maxBuffer: 4*1024*1024, encoding: 'utf-8',
+  input: readFileSync(promptFile, 'utf-8'),
+});
+```
 
-### Auto-apply (auto_apply.js)
+Score timeout: 120s. Tailor timeout: 120s. Crash log: `crash.log` (gitignored).
 
-Playwright headful browser. Detects ATS (Greenhouse/Lever/Ashby), fills standard fields, uploads CV, pastes cover letter. Does NOT submit — leaves browser open for review. LinkedIn jobs use the installed `job-apply@neonwatty-plugins` Claude Code plugin instead.
+## Inbox scanner (inbox.py)
 
-### Inbox scanner (inbox.py)
+Python + built-in `imaplib`/`email`. Gmail IMAP. Keyword classification. Auto-updates job statuses. `--json` flag saves structured results to `data/inbox_results.json`. Needs `PYTHONIOENCODING=utf-8` on Windows.
 
-Python + built-in `imaplib`/`email` — zero pip installs. Gmail IMAP. Keyword classification. Pipeline-only filter per rules.json. Auto-updates job statuses. Needs `PYTHONIOENCODING=utf-8` on Windows.
+## Web dashboard (dashboard.js + dashboard.html)
 
-### Daily actions (actions.js)
+Pure Node.js HTTP on port 3456. Self-contained SPA.
 
-Combines: old high-score jobs → follow-ups needed → stale applications → inbox replies → fresh strong matches. Returns prioritized list with suggested actions.
+**Sidebar features:**
+- Morning Routine (ATS → LinkedIn → score 20 → inbox → actions)
+- Find Jobs (chains ATS → LinkedIn → Himalayas, 3 steps with live progress)
+- Find Jobs (LinkedIn) — standalone
+- Find Jobs (MENA) — Bayt.com Playwright
+- Score N (adjustable count)
+- Check Inbox (Gmail scan with results panel)
+- Daily Action List (inline panel, priority-sorted)
+- Upload to Agencies (11 UK contractor agencies checklist)
+- Recent Events log + desktop notifications
+- Strict filter status indicator
+- Cancel running jobs (✕) + Cancel all
+
+**Key APIs:** `/api/jobs`, `/api/stats`, `/api/running` (live log), `/api/actions` (JSON), `/api/config`, `/api/action/*`
 
 ## Configuration files
 
-- `companies.json` — permanent sources: `{source, slug, name}`. Greenhouse/Lever/Ashby only.
-- `scrape_config.json` — role keywords, exclusions, locations, remote preferences. The user edits this to tune what jobs appear.
-- `rules.json` — inbox read/write rules, send thresholds, auto-update. Inline `_note` fields explain each setting.
-- `email_config.json` — Gmail SMTP + IMAP credentials. Gitignored. Template: `email_config.example.json`.
-- `profile/` directory — all gitignored. Users copy `.example` files on setup.
+- `companies.json` — 51 permanent sources: `{source, slug, name}`
+- `scrape_config.json` — 47 role keywords, 54 excluded roles, ~100 locations (UK/Europe/Gulf/Lebanon), strict_filter with 56 excluded industries, freshness, caps
+- `rules.json` — inbox rules, auto-send threshold (STRONG_MATCH), auto-update
+- `email_config.json` — Gmail SMTP/IMAP credentials (gitignored)
 
-## Profile files (all gitignored)
+## Sensitive data (gitignored)
 
-- `profile/master_doc.md` — full career document (Part A: experience, Part B: interview stories)
-- `profile/cv.md` — base CV text
-- `profile/contract_profile.json` — rates (£250-350/day), availability, IR35, contract prefs
-- `profile/contract_cv.md` — delivery-focused contract CV
-
-## Adding companies or sources
-
-Permanent: find ATS slug from careers page URL, add to `companies.json`, click "Find Jobs (ATS)" in dashboard.
-
-Contract: add fetcher function in `contract_find.js` following existing pattern.
-
-## Sensitive data
-
-All personal data is gitignored: `profile/`, `data/`, `output/`, `email_config.json`. The repo is safe to publish on GitHub.
+`profile/`, `data/`, `output/`, `crash.log`, `email_config.json`, `data/linkedin_profile/`

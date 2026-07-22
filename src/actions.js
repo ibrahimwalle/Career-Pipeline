@@ -1,6 +1,8 @@
 // actions.js — Daily prioritized action list
 // Combines: job age, scores, inbox results, application timeline
-// Run: node src/actions.js   (terminal)
+// Run: node src/actions.js                    (terminal)
+//      node src/actions.js --no-inbox         (skip inbox scan)
+//      node src/actions.js --no-inbox --json  (machine-readable JSON for dashboard)
 // API: /api/actions           (dashboard)
 import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'fs';
 import { resolve, dirname } from 'path';
@@ -12,8 +14,12 @@ const ROOT = resolve(__dirname, '..');
 const DATA_DIR = resolve(ROOT, 'data');
 const JOBS_FILE = resolve(DATA_DIR, 'jobs.json');
 const CONTRACT_JOBS_FILE = resolve(DATA_DIR, 'contract_jobs.json');
+const INBOX_RESULTS_FILE = resolve(DATA_DIR, 'inbox_results.json');
 
 const DAY = 86400000;
+const ARGS = process.argv.slice(2);
+const FLAG_NO_INBOX = ARGS.includes('--no-inbox');
+const FLAG_JSON = ARGS.includes('--json');
 
 function load(f) { return existsSync(f) ? JSON.parse(readFileSync(f,'utf-8')) : []; }
 function daysAgo(d) { return d ? Math.round((Date.now() - new Date(d)) / DAY) : null; }
@@ -121,7 +127,20 @@ function inboxReplyActions(inboxResults) {
     }));
 }
 
-// ─── Summarize with Claude ──────────────────────────────────
+// ─── Load saved inbox results ────────────────────────────────
+
+function loadInboxResults() {
+  // Read previously-saved inbox scan results (from inbox.py --json)
+  try {
+    if (existsSync(INBOX_RESULTS_FILE)) {
+      const data = JSON.parse(readFileSync(INBOX_RESULTS_FILE, 'utf-8'));
+      return data.emails || [];
+    }
+  } catch {}
+  return [];
+}
+
+// ─── Summarize ───────────────────────────────────────────────
 
 function generateSummary(actions) {
   const high = actions.filter(a => a.priority === 'HIGH');
@@ -136,22 +155,6 @@ function generateSummary(actions) {
   };
 }
 
-// ─── Collect recent inbox results ────────────────────────────
-
-function getRecentInboxActivity() {
-  // Try to run inbox scanner for last 3 days and capture results
-  try {
-    const inboxScript = resolve(__dirname, 'inbox.py');
-    const result = execSync(`python "${inboxScript}" 3`, {
-      cwd: ROOT, timeout: 30000, maxBuffer: 1024*1024, encoding:'utf-8',
-      env: { ...process.env, PYTHONIOENCODING:'utf-8', PYTHONUTF8:'1' }
-    });
-    return result;
-  } catch (e) {
-    return e.stdout || '';
-  }
-}
-
 // ─── Main ───────────────────────────────────────────────────
 
 async function main() {
@@ -159,14 +162,17 @@ async function main() {
   const contractJobs = load(CONTRACT_JOBS_FILE);
   const allJobs = [...permJobs, ...contractJobs];
 
+  // Load saved inbox results (from previous inbox.py --json scans)
+  const inboxResults = FLAG_NO_INBOX ? [] : loadInboxResults();
+
   // Collect actions from all sources
   const actions = [
-    ...urgentInboxActions([]),
+    ...urgentInboxActions(inboxResults),
     ...freshHighMatchActions(allJobs),
     ...expiringJobs(allJobs),
     ...followUpActions(allJobs),
     ...staleApplications(allJobs),
-    ...inboxReplyActions([]),
+    ...inboxReplyActions(inboxResults),
   ];
 
   // Sort: HIGH → MEDIUM → LOW, then by age/score
@@ -179,7 +185,58 @@ async function main() {
 
   const info = generateSummary(actions);
 
-  // ─── Display ─────────────────────────────────────────
+  // Compute pipeline health
+  const scored = allJobs.filter(j => j.score != null);
+  const applied = allJobs.filter(j => ['applied','bid'].includes(j.status));
+  const active = allJobs.filter(j => ['screening','interviewing','client_call'].includes(j.status));
+  const offers = allJobs.filter(j => ['offer','won'].includes(j.status));
+  const strong = scored.filter(j => j.score >= 80);
+  const appliedStrong = strong.filter(j => ['applied','bid','screening','interviewing','client_call'].includes(j.status));
+
+  const health = {
+    total: allJobs.length,
+    scored: scored.length,
+    strong: strong.length,
+    applied: applied.length,
+    active: active.length,
+    offers: offers.length,
+    strongUnapplied: strong.length - appliedStrong.length,
+    appliedRatio: strong.length > 0 ? Math.round(appliedStrong.length/strong.length*100) : 0,
+  };
+
+  // ─── JSON output mode (for dashboard) ──────────────────
+  if (FLAG_JSON) {
+    const output = {
+      date: new Date().toISOString(),
+      dateFormatted: new Date().toLocaleDateString('en-GB', {weekday:'long', day:'numeric', month:'long'}),
+      summary: info.summary,
+      focusToday: info.focus_today,
+      totalActions: actions.length,
+      highCount: actions.filter(a => a.priority === 'HIGH').length,
+      mediumCount: actions.filter(a => a.priority === 'MEDIUM').length,
+      lowCount: actions.filter(a => a.priority === 'LOW').length,
+      health,
+      inboxCount: inboxResults.length,
+      actions: actions.map(a => ({
+        priority: a.priority,
+        type: a.type,
+        title: a.title,
+        detail: a.detail || '',
+        suggested: a.suggested || '',
+        ageDays: a.age_days || null,
+        jobId: a.job?.id || null,
+        jobUrl: a.job?.url || null,
+        jobScore: a.job?.score || null,
+        jobCompany: a.job?.company || null,
+        jobTitle: a.job?.title || null,
+        jobStatus: a.job?.status || null,
+      })),
+    };
+    console.log(JSON.stringify(output));
+    return;
+  }
+
+  // ─── Display (terminal) ────────────────────────────────
   const W = process.stdout.columns || 80;
   const pad = (s,n) => (s||'').padEnd(n);
 
@@ -217,13 +274,6 @@ async function main() {
   // ─── Pipeline health ──────────────────────────────────
   console.log('  PIPELINE HEALTH');
   console.log('  ' + '─'.repeat(60));
-  const scored = allJobs.filter(j => j.score != null);
-  const applied = allJobs.filter(j => ['applied','bid'].includes(j.status));
-  const active = allJobs.filter(j => ['screening','interviewing','client_call'].includes(j.status));
-  const offers = allJobs.filter(j => ['offer','won'].includes(j.status));
-  const strong = scored.filter(j => j.score >= 80);
-  const appliedStrong = strong.filter(j => ['applied','bid','screening','interviewing','client_call'].includes(j.status));
-
   console.log(`  Pipeline size:   ${allJobs.length} total  |  ${scored.length} scored  |  ${strong.length} strong matches`);
   console.log(`  Applications:    ${applied.length} sent  |  ${active.length} active conversations  |  ${offers.length} offers`);
   if (strong.length > 0) {

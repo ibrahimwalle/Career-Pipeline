@@ -14,6 +14,9 @@ profile/auto_apply_profile.json
 # Output — generated cover letters, briefs, pitches
 output/
 
+# Crash logs
+crash.log
+
 # Node
 node_modules/
 

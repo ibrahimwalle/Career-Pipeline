@@ -61,10 +61,10 @@ async function main() {
   writeFileSync(promptFile, buildPitchPrompt(job));
 
   try {
-    const cmd = `claude --print --output-format text --dangerously-skip-permissions -p "$(cat '${promptFile.replace(/'/g, "'\\''")}')"`;
     console.log('Generating contract materials...');
-    const result = execSync(cmd, {
+    const result = execSync(`claude --print --output-format text --dangerously-skip-permissions`, {
       cwd: ROOT, timeout: 120000, maxBuffer: 1024 * 1024, encoding: 'utf-8',
+      input: readFileSync(promptFile, 'utf-8'),
     });
 
     const jsonMatch = result.match(/\{[\s\S]*"contract_pitch"[\s\S]*\}/);

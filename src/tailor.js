@@ -62,13 +62,13 @@ async function main() {
   writeFileSync(promptFile, buildTailorPrompt(job));
 
   try {
-    const cmd = `claude --print --output-format text --dangerously-skip-permissions -p "$(cat '${promptFile.replace(/'/g, "'\\''")}')"`;
     console.log('🤖 Asking Claude to tailor...');
-    const result = execSync(cmd, {
+    const result = execSync(`claude --print --output-format text --dangerously-skip-permissions`, {
       cwd: ROOT,
       timeout: 120000,
       maxBuffer: 1024 * 1024,
       encoding: 'utf-8',
+      input: readFileSync(promptFile, 'utf-8'),
     });
 
     // Parse JSON from response
