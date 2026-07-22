@@ -585,6 +585,13 @@ const server = createServer((req, res) => {
     return json(res, { id: entry.id, status:'started', message:`Morning routine: ATS → LinkedIn → Himalayas → score 20 → inbox → actions` });
   }
 
+  // ── Quick Score (no Claude, instant keyword-based) ─────
+  if (p === '/api/action/quick-score') {
+    const pipeline = url.searchParams.get('pipeline') || 'perm';
+    const count = Math.min(parseInt(url.searchParams.get('count') || '0') || 100, 500);
+    const entry = runScript('quick_score.js', [String(count), pipeline], 'quick_score', pipeline);
+    return json(res, { id: entry.id, status: 'started', message: `Quick-scoring ${pipeline} jobs...` });
+  }
   // ── Manual status update ─────────────────────────────────
   if (p === '/api/action/status') {
     const jobId = url.searchParams.get('id');

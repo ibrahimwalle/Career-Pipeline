@@ -254,6 +254,9 @@
       <input type="number" id="scoreCount" value="10" min="1" max="100"
         style="width:50px;background:var(--surface);border:1px solid var(--border);color:var(--text);border-radius:6px;padding:4px 6px;font-size:12px;text-align:center">
     </div>
+    <button class="action-btn" onclick="doAction('quick-score')" id="btn-quick-score" style="border-color:rgba(63,185,80,0.3)">
+      <span class="icon">⚡</span> Quick Score (instant)
+    </button>
     <button class="action-btn" onclick="doAction('inbox')" id="btn-inbox">
       <span class="icon">📬</span> Check Inbox
     </button>
@@ -892,6 +895,10 @@ async function doAction(type){
       const cnt = document.getElementById('scoreCount')?.value || 10;
       url = `/api/action/score?pipeline=${pipeline}&count=${cnt}`;
       msg = `Scoring top ${cnt}...`;
+      break;
+    case 'quick-score':
+      url = `/api/action/quick-score?pipeline=${pipeline}&count=200`;
+      msg = 'Quick-scoring all jobs (instant)...';
       break;
     case 'actions': loadDailyActions(); return;
     case 'agencies': showAgencyPanel(); return;
