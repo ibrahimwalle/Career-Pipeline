@@ -26,10 +26,10 @@ const CONFIG_PATH = resolve(ROOT, 'scrape_config.json');
 function loadConfig() {
   if (!existsSync(CONFIG_PATH)) {
     return {
-      role_keywords: ['software engineer', 'backend engineer', 'full stack', 'ai engineer', 'ml engineer', 'platform engineer', 'cloud engineer', 'data engineer', 'systems engineer', 'api engineer'],
-      exclude_roles: ['junior', 'intern', 'graduate', 'entry level', 'apprentice', 'vp of', 'director', 'head of engineering', 'engineering manager', 'mobile engineer', 'ios', 'android', 'embedded', 'firmware', 'qa engineer', 'test engineer'],
-      remote_preference: { remote_only: true, hybrid_ok: true, hybrid_locations: ['london', 'united kingdom', 'uk'], exclude_onsite: true },
-      locations: { include: ['remote', 'london', 'united kingdom', 'uk', 'europe', 'anywhere', 'distributed'], exclude: [] },
+      role_keywords: ['software engineer', 'backend engineer', 'full stack', 'ai engineer', 'ml engineer', 'platform engineer', 'cloud engineer', 'data engineer', 'systems engineer', 'api engineer', 'integrations engineer', 'forward deployed engineer', 'project manager'],
+      exclude_roles: ['intern', 'graduate', 'entry level', 'apprentice', 'vp of', 'director', 'head of engineering', 'engineering manager', 'mobile engineer', 'ios', 'android', 'embedded', 'firmware', 'qa engineer', 'test engineer'],
+      remote_preference: { remote_only: true, hybrid_ok: true, hybrid_locations: ['london', 'united kingdom', 'uk'], exclude_onsite: false },
+      locations: { include: ['remote', 'london', 'united kingdom', 'uk', 'europe', 'anywhere', 'distributed', 'MENA', 'spain', 'madrid',], exclude: [] },
       max_jobs_per_company: null,
     };
   }
@@ -199,7 +199,7 @@ function isContractRelevant(job) {
 function buildSearchUrl(searchTerms) {
   const keywords = encodeURIComponent(searchTerms);
   // f_WT=2       → Remote
-  // f_TPR=r2592000 → Past 30 days (2,592,000 seconds)
+  // f_TPR=r1592000 → Past 15 days (1,592,000 seconds)
   // f_JT=C%2CT   → Contract + Temporary (URL-encoded comma)
   // sortBy=R     → Most recent first
   // refresh=true → Force fresh search (bypass cache)
@@ -208,7 +208,7 @@ function buildSearchUrl(searchTerms) {
     'https://www.linkedin.com/jobs/search/?' +
     `keywords=${keywords}` +
     `&f_WT=2` +
-    `&f_TPR=r2592000` +
+    `&f_TPR=r1592000` +
     `&f_JT=C%2CT` +
     `&sortBy=R` +
     `&refresh=true` +
