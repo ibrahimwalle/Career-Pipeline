@@ -55,6 +55,9 @@ REJECTION_KEYWORDS = [
     'not a fit', 'no longer under consideration', 'position has been filled',
     'thank you for your interest but', 'regret to inform', 'we have decided not',
     'will not be moving forward', 'not been selected',
+    'other applicants who more closely match',
+    'we received other applicants',
+    'we know that messages like this are never fun',
 ]
 
 OFFER_KEYWORDS = [
