@@ -53,7 +53,8 @@ REJECTION_KEYWORDS = [
     'unfortunately', 'not moving forward', 'other candidates',
     'will not be', 'regret to inform', 'decided to pursue',
     'not a fit', 'no longer under consideration', 'position has been filled',
-    'thank you for your interest', 'we have decided',
+    'thank you for your interest but', 'regret to inform', 'we have decided not',
+    'will not be moving forward', 'not been selected',
 ]
 
 OFFER_KEYWORDS = [
@@ -66,6 +67,15 @@ SCREENING_KEYWORDS = [
     'recruiter', 'talent', 'hiring', 'hr', 'people ops',
     'initial conversation', 'tell me more', 'learn about your background',
     'quick chat', 'introductory call',
+]
+
+APPLICATION_CONFIRMED_KEYWORDS = [
+    'thank you for applying', 'thanks for applying', 'application received',
+    'we have received your application', 'submitting your application',
+    'thanks so much for submitting', 'thank you for submitting',
+    'application confirmation', 'we\'ve received your application',
+    'thank you for your application', 'thank you for your interest in',
+    'your application has been received', 'your application for',
 ]
 
 # Emails that should NEVER be classified as recruiter emails
@@ -81,7 +91,6 @@ SPAM_PATTERNS = [
     'course', 'webinar', 'masterclass', 'bootcamp',
     'discount', 'offer ends', 'sale', 'shop',
     'order confirmed', 'tracking', 'receipt',
-    'noreply@', 'no-reply@', 'donotreply@',
     'notification', 'alert', 'reminder',
     'update@cord.co', 'cord.co', 'inmail-hit-reply',
     'you have succesfully create an account', 'job application acknowledgement',
@@ -144,6 +153,10 @@ def classify_email(subject, body, from_addr):
 
     if any(kw in text for kw in OFFER_KEYWORDS):
         return 'offer'
+    # Check application confirmations BEFORE rejections — "thank you for applying"
+    # should not be caught by "thank you for your interest" in the rejection list
+    if any(kw in text for kw in APPLICATION_CONFIRMED_KEYWORDS):
+        return 'application_confirmed'
     if any(kw in text for kw in REJECTION_KEYWORDS):
         return 'rejected'
     if any(kw in text for kw in INTERVIEW_KEYWORDS):
@@ -266,7 +279,7 @@ def scan_inbox(days=14, unread_only=False):
 
         # Process emails (newest first, limited to 200 for performance)
         for msg_id in reversed(all_ids[-200:]):
-            status, msg_data = mail.fetch(msg_id, '(RFC822)')
+            status, msg_data = mail.fetch(msg_id, '(BODY.PEEK[])')
             if status != 'OK':
                 continue
 
@@ -429,24 +442,28 @@ def scan_inbox(days=14, unread_only=False):
 
             updated = 0
             for e in recruiter_emails:
-                if e['matched_job_id'] and e['classification'] in ['interviewing', 'rejected', 'offer', 'screening']:
+                if e['matched_job_id'] and e['classification'] in ['interviewing', 'rejected', 'offer', 'screening', 'application_confirmed']:
                     for job in jobs:
                         if job['id'] == e['matched_job_id']:
                             old_status = job.get('status', 'new')
                             new_status = e['classification']
-                            if old_status != new_status:
+                            # Map application_confirmed to 'applied' in the pipeline
+                            display_status = 'applied' if new_status == 'application_confirmed' else new_status
+                            if old_status != display_status:
                                 if auto_update:
-                                    job['status'] = new_status
+                                    job['status'] = display_status
                                     job['statusUpdatedAt'] = datetime.now(timezone.utc).isoformat()
+                                    if new_status == 'application_confirmed':
+                                        job['appliedAt'] = datetime.now(timezone.utc).isoformat()
                                     if new_status == 'interviewing':
                                         job['interviewingAt'] = datetime.now(timezone.utc).isoformat()
                                     if new_status == 'rejected':
                                         job['rejectedAt'] = datetime.now(timezone.utc).isoformat()
                                     if new_status == 'offer':
                                         job['offerAt'] = datetime.now(timezone.utc).isoformat()
-                                    print(f'  OK {job["title"]} @ {job["company"]}: {old_status} -> {new_status}')
+                                    print(f'  OK {job["title"]} @ {job["company"]}: {old_status} -> {display_status}')
                                 else:
-                                    print(f'  Would update: {job["title"]} @ {job["company"]}: {old_status} -> {new_status}')
+                                    print(f'  Would update: {job["title"]} @ {job["company"]}: {old_status} -> {display_status}')
                                 updated += 1
 
             if updated > 0 and auto_update:

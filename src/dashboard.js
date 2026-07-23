@@ -415,7 +415,7 @@ const server = createServer((req, res) => {
     const entry = { id: runId(), type:'inbox', pipeline:'perm', started: Date.now(), status:'running', log:'' };
     running.set(entry.id, entry);
 
-    const child = spawn('python', [resolve(__dirname, 'inbox.py'), '--json', '--unread', String(days)], {
+    const child = spawn('python', [resolve(__dirname, 'inbox.py'), '--json', String(days)], {
       cwd: ROOT, stdio: ['ignore','pipe','pipe'], timeout: 60000,
       env: { ...process.env, PYTHONIOENCODING:'utf-8', PYTHONUTF8:'1' }
     });

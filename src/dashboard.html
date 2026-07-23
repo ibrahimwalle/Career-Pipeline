@@ -872,23 +872,28 @@ async function scanInboxAndShow() {
   } catch (e) { toast('Error: ' + e.message); overlay.classList.remove('show'); return; }
 
   let tries = 0;
+  let lastResult = null;
   const check = setInterval(async () => {
     tries++;
     try {
+      // Try to get inbox results directly — they appear when scan is done
+      const inboxData = await api('/api/inbox-results');
+      const hasFreshResults = inboxData && inboxData.emails !== undefined;
+
       const running = await api('/api/running');
       const job = running.find(x => x.id === scanId);
-      if (!job || job.status === 'done' || job.status === 'error') {
+      const jobDone = !job || job.status === 'done' || job.status === 'error';
+
+      if (hasFreshResults && (jobDone || tries > 3)) {
         clearInterval(check);
-        if (job && job.status === 'done') {
-          toast('Inbox scan done');
-          const data = await api('/api/inbox-results');
-          renderInboxPopup(data);
-          load();
-        } else {
-          document.getElementById('log-popup-body').innerHTML = '<p style="color:var(--red);text-align:center">Scan failed. Check email_config.json</p>';
-        }
+        toast('Inbox scan done');
+        renderInboxPopup(inboxData);
+        load();
+      } else if (jobDone && !hasFreshResults) {
+        clearInterval(check);
+        document.getElementById('log-popup-body').innerHTML = '<p style="color:var(--red);text-align:center">Scan failed. Check email_config.json and Gmail App Password.</p>';
       } else {
-        const elapsed = Math.round((Date.now() - job.started) / 1000);
+        const elapsed = job ? Math.round((Date.now() - job.started) / 1000) : tries * 2;
         document.getElementById('log-popup-meta').innerHTML = `<span style="color:var(--accent)">Scanning... ${elapsed}s</span>`;
       }
     } catch (e) { /* keep polling */ }
@@ -955,6 +960,7 @@ async function doAction(type){
       url = `/api/action/quick-score?pipeline=${pipeline}&count=${cnt||200}`;
       msg = 'Quick-scoring (instant)...';
       break;
+    case 'inbox': scanInboxAndShow(); return;
     case 'actions': loadDailyActions(); return;
     case 'agencies': showAgencyPanel(); return;
     case 'morning':
