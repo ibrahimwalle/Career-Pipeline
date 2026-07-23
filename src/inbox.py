@@ -183,14 +183,36 @@ def save_jobs(jobs):
     with open(JOBS_FILE, 'w', encoding='utf-8') as f:
         json.dump(jobs, f, indent=2, ensure_ascii=False)
 
-def match_job(company_name, jobs):
-    """Try to match an email to a job in the pipeline by company name"""
+def match_job(company_name, jobs, subject='', body=''):
+    """Match email to pipeline job by company AND title (from email body).
+    When multiple jobs exist at same company, try to match the specific role mentioned."""
     company_lower = company_name.lower().strip()
+    candidates = []
     for job in jobs:
         job_company = job.get('company', '').lower()
         if company_lower in job_company or job_company in company_lower:
-            return job
-    return None
+            candidates.append(job)
+
+    if not candidates:
+        return None
+    if len(candidates) == 1:
+        return candidates[0]
+
+    # Multiple jobs at same company — try title matching from email body
+    text = (subject + ' ' + body).lower()
+    for job in candidates:
+        title = (job.get('title') or '').lower()
+        # Check if significant words from the job title appear in the email
+        # Use word boundaries to avoid 'engineer' matching 'engineering'
+        import re
+        words = [w for w in title.split() if len(w) > 3]
+        if words:
+            matches = sum(1 for w in words if re.search(r'\b' + re.escape(w) + r'\b', text))
+            if matches >= len(words) * 0.5:
+                return job
+
+    # Fall back to first candidate
+    return candidates[0]
 
 def extract_company_from_email(from_addr, subject, body):
     """Try to extract company name from sender or email content"""
@@ -342,13 +364,13 @@ def scan_inbox(days=14, unread_only=False):
             # Try to match to pipeline
             matched_job = None
             if company:
-                matched_job = match_job(company, jobs)
+                matched_job = match_job(company, jobs, subject, body)
 
             if not matched_job:
                 text_lower = f"{subject} {body[:1000]}".lower()
                 for c in companies_in_pipeline:
                     if c in text_lower:
-                        matched_job = match_job(c, jobs)
+                        matched_job = match_job(c, jobs, subject, body)
                         if matched_job:
                             company = c
                             break
