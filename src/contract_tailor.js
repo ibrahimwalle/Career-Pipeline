@@ -62,7 +62,7 @@ async function main() {
 
   try {
     console.log('Generating contract materials...');
-    const result = execSync(`claude --print --output-format text --dangerously-skip-permissions`, {
+    const result = execSync(`claude --model claude-sonnet-5 --print --output-format text --dangerously-skip-permissions`, {
       cwd: ROOT, timeout: 120000, maxBuffer: 1024 * 1024, encoding: 'utf-8',
       input: readFileSync(promptFile, 'utf-8'),
     });

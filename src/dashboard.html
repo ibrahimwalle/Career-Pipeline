@@ -234,7 +234,7 @@
     <button class="action-btn morning-btn" onclick="doAction('morning')" id="btn-morning">
       <span class="icon">🌅</span> Morning Routine
     </button>
-    <p style="font-size:9px;color:var(--muted);margin:0 0 8px 0">ATS + LinkedIn → score → inbox → actions</p>
+    <p style="font-size:9px;color:var(--muted);margin:0 0 8px 0">ATS + LinkedIn + Himalayas → quick-score → inbox → actions</p>
     <button class="action-btn" onclick="doAction('scrape')" id="btn-scrape">
       <span class="icon">🔍</span> Find Jobs
     </button>
@@ -254,9 +254,6 @@
       <input type="number" id="scoreCount" value="10" min="1" max="100"
         style="width:50px;background:var(--surface);border:1px solid var(--border);color:var(--text);border-radius:6px;padding:4px 6px;font-size:12px;text-align:center">
     </div>
-    <button class="action-btn" onclick="doAction('quick-score')" id="btn-quick-score" style="border-color:rgba(63,185,80,0.3)">
-      <span class="icon">⚡</span> Quick Score (instant)
-    </button>
     <button class="action-btn" onclick="doAction('inbox')" id="btn-inbox">
       <span class="icon">📬</span> Check Inbox
     </button>
@@ -892,13 +889,9 @@ async function doAction(type){
     case 'scrape-linkedin': url=`/api/action/scrape?pipeline=perm&source=linkedin`; msg='Finding LinkedIn jobs...'; break;
     case 'scrape-contract': url=`/api/action/scrape?pipeline=contract&source=all`; msg='Finding contract jobs...'; break;
     case 'score':
-      const cnt = document.getElementById('scoreCount')?.value || 10;
-      url = `/api/action/score?pipeline=${pipeline}&count=${cnt}`;
-      msg = `Scoring top ${cnt}...`;
-      break;
-    case 'quick-score':
-      url = `/api/action/quick-score?pipeline=${pipeline}&count=200`;
-      msg = 'Quick-scoring all jobs (instant)...';
+      const cnt = document.getElementById('scoreCount')?.value || 0;
+      url = `/api/action/quick-score?pipeline=${pipeline}&count=${cnt||200}`;
+      msg = 'Quick-scoring (instant)...';
       break;
     case 'actions': loadDailyActions(); return;
     case 'agencies': showAgencyPanel(); return;

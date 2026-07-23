@@ -52,7 +52,7 @@ function scoreOneWithClaude(job) {
     const promptFile = resolve(promptDir, `score_${job.id}.txt`);
     writeFileSync(promptFile, buildScorePrompt(job));
 
-    const child = spawn('claude', ['--print', '--output-format', 'text', '--dangerously-skip-permissions'], {
+    const child = spawn('claude', ['--model', 'claude-sonnet-5', '--print', '--output-format', 'text', '--dangerously-skip-permissions'], {
       cwd: ROOT, timeout: 180000, maxBuffer: 4 * 1024 * 1024, encoding: 'utf-8',
       env: { ...process.env, PYTHONIOENCODING: 'utf-8', PYTHONUTF8: '1' }
     });

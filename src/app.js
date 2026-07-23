@@ -260,7 +260,7 @@ async function actionScore() {
     }
     writeFileSync(promptFile, prompt);
 
-    const result = execSync(`claude --print --output-format text --dangerously-skip-permissions`, { cwd: ROOT, timeout: 120000, maxBuffer: 1024 * 1024, encoding: 'utf-8', input: readFileSync(promptFile, 'utf-8') });
+    const result = execSync(`claude --model claude-sonnet-5 --print --output-format text --dangerously-skip-permissions`, { cwd: ROOT, timeout: 120000, maxBuffer: 1024 * 1024, encoding: 'utf-8', input: readFileSync(promptFile, 'utf-8') });
     const jsonMatch = result.match(/\{[\s\S]*"score"[\s\S]*\}/);
 
     if (jsonMatch) {

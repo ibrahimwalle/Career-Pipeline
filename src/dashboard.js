@@ -283,7 +283,7 @@ const server = createServer((req, res) => {
         writeFileSync(promptFile, prompt);
 
         const result = spawnSync('claude', [
-          '--print', '--output-format', 'text', '--dangerously-skip-permissions'
+          '--model', 'claude-sonnet-5', '--print', '--output-format', 'text', '--dangerously-skip-permissions'
         ], {
           cwd: ROOT, timeout: 120000, maxBuffer: 4*1024*1024, encoding:'utf-8',
           input: readFileSync(promptFile, 'utf-8'),
@@ -498,8 +498,8 @@ const server = createServer((req, res) => {
           entry.step = 3; entry.stepLabel = 'Scoring jobs...';
           entry.log += 'Bonus complete. Step 3/5: Scoring 20 jobs...\n';
 
-          // Step 3: Score 20 new jobs
-          const step3 = spawn('node', [resolve(__dirname, 'score.js'), '20'], {
+          // Step 3: Quick-score all jobs (instant)
+          const step3 = spawn('node', [resolve(__dirname, 'quick_score.js'), '200', 'perm'], {
             cwd: ROOT, stdio: ['ignore','pipe','pipe'], timeout: 600000,
             env: { ...process.env, PYTHONIOENCODING:'utf-8', PYTHONUTF8:'1' }
           });
