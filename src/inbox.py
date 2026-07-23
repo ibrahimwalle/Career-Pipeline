@@ -83,6 +83,11 @@ SPAM_PATTERNS = [
     'order confirmed', 'tracking', 'receipt',
     'noreply@', 'no-reply@', 'donotreply@',
     'notification', 'alert', 'reminder',
+    'update@cord.co', 'cord.co', 'inmail-hit-reply',
+    'you have succesfully create an account', 'job application acknowledgement',
+    'stay in consideration', 'complete your interview',
+    'job posting', 'job alert', 'job recommendation',
+    'weekly jobs', 'jobs this week', 'your job matches',
 ]
 
 def is_spam_or_newsletter(subject, from_addr, body):
@@ -183,8 +188,9 @@ def extract_company_from_email(from_addr, subject, body):
             return match.group(1)
     return None
 
-def scan_inbox(days=14):
-    """Connect to Gmail IMAP, scan inbox for recruiter emails"""
+def scan_inbox(days=14, unread_only=False):
+    """Connect to Gmail IMAP, scan inbox for recruiter emails.
+    If unread_only=True, only scans unread emails (faster, show latest)."""
 
     # --- Load rules ---
     rules = load_rules()
@@ -231,6 +237,8 @@ def scan_inbox(days=14):
         print(f"Searching emails since {since_date}...")
 
         search_criteria = f'(SINCE "{since_date}")'
+        if unread_only:
+            search_criteria = f'(SINCE "{since_date}" UNSEEN)'
         status, message_ids = mail.search(None, search_criteria)
 
         if status != 'OK':
@@ -286,7 +294,7 @@ def scan_inbox(days=14):
                 continue
 
             # Skip spam/newsletters/job-digests BEFORE classification
-            if is_spam_or_newsletter(subject, sender_email, body):
+            if is_spam_or_newsletter(subject, from_addr, body):
                 continue
 
             # Check if it could be recruiter-related
@@ -476,16 +484,19 @@ def scan_inbox(days=14):
 if __name__ == '__main__':
     days = 14
     json_output = False
+    unread_only = False
     for arg in sys.argv[1:]:
         if arg == '--json':
             json_output = True
+        elif arg == '--unread':
+            unread_only = True
         else:
             try:
                 days = int(arg)
             except ValueError:
                 pass
 
-    results = scan_inbox(days) or []
+    results = scan_inbox(days, unread_only=unread_only) or []
 
     if json_output:
         # Write structured results for dashboard consumption

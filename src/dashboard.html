@@ -859,17 +859,21 @@ async function showInboxPanel() {
 }
 
 async function scanInboxAndShow() {
-  toast('Scanning inbox...');
+  toast('Scanning inbox for unread emails...');
+  // Use the log popup as a modal for inbox results
+  const overlay = document.getElementById('log-popup-overlay');
+  const title = document.getElementById('log-popup-title');
+  title.textContent = '📬 Inbox Scan';
+  document.getElementById('log-popup-meta').innerHTML = '<span style="color:var(--accent)">Scanning unread emails...</span>';
+  document.getElementById('log-popup-body').innerHTML = '<div style="text-align:center;padding:20px"><span class="spinner" style="display:inline-block;width:12px;height:12px;border-radius:50%;background:var(--accent);animation:pulse 1s infinite;margin-right:8px"></span> Searching...</div>';
+  overlay.classList.add('show');
+
   let scanId;
   try {
-    const r = await api('/api/action/inbox?days=7');
+    const r = await api('/api/action/inbox?days=14');
     scanId = r.id;
     pollRunning();
-  } catch (e) { toast('Error: ' + e.message); return; }
-
-  showPanel('inbox');
-  const body = document.getElementById('inbox-panel-body');
-  body.innerHTML = '<div class="inbox-scan-status"><span class="spinner" style="display:inline-block;width:10px;height:10px;border-radius:50%;background:var(--accent);animation:pulse 1s infinite;margin-right:8px"></span>Scanning inbox... (may take 30-60s)</div>';
+  } catch (e) { toast('Error: ' + e.message); overlay.classList.remove('show'); return; }
 
   let tries = 0;
   const check = setInterval(async () => {
@@ -880,21 +884,64 @@ async function scanInboxAndShow() {
       if (!job || job.status === 'done' || job.status === 'error') {
         clearInterval(check);
         if (job && job.status === 'done') {
-          toast('Inbox scan complete');
+          toast('Inbox scan done');
           const data = await api('/api/inbox-results');
-          renderInboxResults(data);
+          renderInboxPopup(data);
           load();
         } else {
-          body.innerHTML = '<p style="color:var(--red)">Inbox scan failed. Check email_config.json and Gmail App Password.</p>';
-          toast('Inbox scan failed');
+          document.getElementById('log-popup-body').innerHTML = '<p style="color:var(--red);text-align:center">Scan failed. Check email_config.json</p>';
         }
-      } else if (tries % 5 === 0) {
+      } else {
         const elapsed = Math.round((Date.now() - job.started) / 1000);
-        body.innerHTML = `<div class="inbox-scan-status"><span class="spinner" style="display:inline-block;width:10px;height:10px;border-radius:50%;background:var(--accent);animation:pulse 1s infinite;margin-right:8px"></span>Scanning inbox... (${elapsed}s elapsed)</div>`;
+        document.getElementById('log-popup-meta').innerHTML = `<span style="color:var(--accent)">Scanning... ${elapsed}s</span>`;
       }
     } catch (e) { /* keep polling */ }
-  }, 2000);
+  }, 1500);
   setTimeout(() => { clearInterval(check); }, 120000);
+}
+
+function renderInboxPopup(data) {
+  const title = document.getElementById('log-popup-title');
+  const meta = document.getElementById('log-popup-meta');
+  const body = document.getElementById('log-popup-body');
+  const emails = data.emails || [];
+  const total = emails.length;
+
+  title.textContent = `📬 Inbox — Last ${data.days || '?'} Days`;
+  meta.innerHTML = `<span style="color:var(--accent)">${total} job-related emails found</span>`;
+
+  if (!total) {
+    body.innerHTML = '<div style="text-align:center;padding:30px;color:var(--muted)">No new job-related emails since last scan.<br><br>Recent scans found: <b>' + (data.totalFound||0) + '</b> total<br><br>Replies usually take 1-3 weeks.</div>';
+    return;
+  }
+
+  const labels = {
+    interviewing: { color: 'var(--green)', icon: '🎙️', label: 'Interview Invite' },
+    screening: { color: 'var(--purple)', icon: '📞', label: 'Screening Call' },
+    rejected: { color: 'var(--red)', icon: '❌', label: 'Rejected' },
+    offer: { color: 'var(--yellow)', icon: '🏆', label: 'Offer' },
+    recruiter_outreach: { color: 'var(--accent)', icon: '📨', label: 'Recruiter Outreach' },
+    application_confirmed: { color: 'var(--green)', icon: '✅', label: 'Application Confirmed' },
+  };
+
+  body.innerHTML = emails.map((e, i) => {
+    const l = labels[e.classification] || { color: 'var(--muted)', icon: '📧', label: e.classification };
+    const matched = e.matched_job_title ? `<div style="font-size:10px;color:var(--yellow);margin-top:2px">Pipeline: ${esc(e.matched_job_title)}</div>` : '';
+    const company = e.company ? `<span style="color:var(--accent)">${esc(e.company)}</span> · ` : '';
+    return `<div style="padding:8px 0;border-bottom:1px solid var(--border);${i===0?'border-top:1px solid var(--border)':''}">
+      <div style="display:flex;gap:8px;align-items:flex-start">
+        <span style="font-size:16px;flex-shrink:0">${l.icon}</span>
+        <div style="flex:1;min-width:0">
+          <div style="font-size:13px;font-weight:600;margin-bottom:2px">${esc(e.subject)}</div>
+          <div style="font-size:10px;color:var(--muted)">${company}${esc(e.from)}</div>
+          ${matched}
+          <span style="display:inline-block;margin-top:3px;font-size:10px;padding:1px 6px;border-radius:8px;background:${l.color}20;color:${l.color};font-weight:600">${l.label}</span>
+        </div>
+      </div>
+    </div>`;
+  }).join('');
+
+  body.innerHTML += `<div style="text-align:center;margin-top:12px"><button onclick="closeLogPopup()" style="background:var(--accent);color:#fff;border:none;padding:6px 20px;border-radius:6px;cursor:pointer;font-size:12px">Close</button></div>`;
 }
 
 // ─── Actions ────────────────────────────────────────────
