@@ -309,6 +309,13 @@
         <option value="lebanon">Lebanon</option>
         <option value="remote">Remote</option>
       </select>
+      <select id="ageFilter" style="background:var(--surface);border:1px solid var(--border);color:var(--text);padding:4px 8px;border-radius:4px;font-size:11px" onchange="currentAge=this.value;renderTable(filterAndSort())">
+        <option value="">Any age</option>
+        <option value="7">Last 7 days</option>
+        <option value="14">Last 14 days</option>
+        <option value="30">Last 30 days</option>
+        <option value="old">30+ days</option>
+      </select>
       <input type="text" id="search" placeholder="Search...">
       <span class="count" id="count"></span>
     </div>
@@ -371,7 +378,7 @@
 </div>
 
 <script>
-let allJobs=[], currentStatus='all', currentSort='score', currentTab='perm', currentVerdict='', currentLocation='', expanded=null;
+let allJobs=[], currentStatus='all', currentSort='score', currentTab='perm', currentVerdict='', currentLocation='', currentAge='', expanded=null;
 let runningJobs=[], toastTimer;
 
 function api(u) { return fetch(u).then(r=>r.json()); }
@@ -405,6 +412,18 @@ function filterAndSort(){
   }
   const q=(document.getElementById('search')?.value||'').toLowerCase();
   if (q) j=j.filter(x=>(x.title+x.company+(x.location||'')+(x.description||'')).toLowerCase().includes(q));
+  // Age filter
+  if (currentAge) {
+    const maxDays = parseInt(currentAge);
+    const DAY = 86400000;
+    j = j.filter(x => {
+      const d = x.posted || x.scrapedAt;
+      if (!d) return true;
+      const age = (Date.now() - new Date(d)) / DAY;
+      if (currentAge === 'old') return age > 30;
+      return age <= maxDays;
+    });
+  }
   if (currentSort==='score') j.sort((a,b)=>(b.score||b.relevance||0)-(a.score||a.relevance||0));
   else if (currentSort==='date') j.sort((a,b)=>new Date(b.posted||0)-new Date(a.posted||0));
   else j.sort((a,b)=>(a.company||'').localeCompare(b.company||''));

@@ -197,6 +197,17 @@ async function main() {
 
   // Merge: keep existing + new
   const merged = [...existing, ...allJobs];
+  // Cleanup stale jobs (keep applied ones)
+  const protectedS = ['applied','screening','interviewing','offer','bid','client_call','won'];
+  const maxAD = (scrapeCfg||loadedCfg||config||{}).max_job_age_days || 30;
+  const beforeC = merged.length;
+  const cleaned = merged.filter(j => {
+    if (protectedS.includes(j.status)) return true;
+    if (!j.posted) return true;
+    return (Date.now() - new Date(j.posted)) / 86400000 <= maxAD;
+  });
+  if (cleaned.length < beforeC) console.log('Cleaned ' + (beforeC - cleaned.length) + ' stale jobs');
+  allJobs = cleaned; // replace for write
   writeFileSync(JOBS_FILE, JSON.stringify(merged, null, 2));
 
   console.log(`\n  Total: ${merged.length} jobs in pipeline (${allJobs.length} new this run)`);

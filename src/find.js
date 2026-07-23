@@ -213,11 +213,24 @@ async function main() {
     allJobs.push(...capped);
   }
 
-  // Merge: keep existing + new
-  const merged = [...existing, ...allJobs];
+  // Merge: keep existing + new, then cleanup stale jobs
+  let merged = [...existing, ...allJobs];
+
+  // Cleanup: remove jobs older than max_job_age_days UNLESS applied/screening/interviewing/offer
+  const maxAge = scrapeCfg.max_job_age_days || 30;
+  const protectedStatuses = ['applied','screening','interviewing','offer','bid','client_call','won'];
+  const before = merged.length;
+  merged = merged.filter(j => {
+    if (protectedStatuses.includes(j.status)) return true; // never delete applied jobs
+    if (!j.posted) return true; // keep if no date
+    const daysOld = (Date.now() - new Date(j.posted)) / DAY_MS;
+    return daysOld <= maxAge;
+  });
+  const removed = before - merged.length;
+
   writeFileSync(JOBS_FILE, JSON.stringify(merged, null, 2));
 
-  console.log(`\n📊 Total: ${merged.length} jobs in pipeline (${allJobs.length} new this run)`);
+  console.log(`\n📊 Total: ${merged.length} jobs (${allJobs.length} new, ${removed} stale removed)`);
   console.log(`📁 Saved to: data/jobs.json`);
   console.log(`\nNext: node src/score.js     (score jobs against your profile)`);
   console.log(`      node src/status.js    (view pipeline)`);

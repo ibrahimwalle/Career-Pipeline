@@ -14,6 +14,30 @@ const CONTRACT_JOBS_FILE = resolve(DATA_DIR, 'contract_jobs.json');
 const LAST_ACTIONS_FILE = resolve(DATA_DIR, 'last_actions.json');
 const PORT = 3456;
 
+// ─── Startup: clean stale jobs ──────────────────────────────
+function cleanupStaleJobs() {
+  const maxAge = 30; // days
+  const protectedStatuses = ['applied','screening','interviewing','offer','bid','client_call','won'];
+  for (const file of [JOBS_FILE, CONTRACT_JOBS_FILE]) {
+    if (!existsSync(file)) continue;
+    try {
+      const jobs = JSON.parse(readFileSync(file, 'utf-8'));
+      const before = jobs.length;
+      const cleaned = jobs.filter(j => {
+        if (protectedStatuses.includes(j.status)) return true;
+        if (!j.posted && !j.scrapedAt) return true;
+        const date = j.posted || j.scrapedAt;
+        return (Date.now() - new Date(date)) / 86400000 <= maxAge;
+      });
+      if (cleaned.length < before) {
+        writeFileSync(file, JSON.stringify(cleaned, null, 2));
+        console.log(`  Cleaned ${before - cleaned.length} stale jobs from ${file.replace(/.*\//,'')}`);
+      }
+    } catch {}
+  }
+}
+cleanupStaleJobs();
+
 // ─── Running jobs tracker (for polling status) ──────────────
 const running = new Map(); // id → { type, status, started, log }
 
