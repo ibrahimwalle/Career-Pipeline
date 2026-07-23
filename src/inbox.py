@@ -158,12 +158,11 @@ def classify_email(subject, body, from_addr):
     text = f"{subject} {body}".lower()
     from_addr = from_addr.lower()
 
-    if any(kw in text for kw in OFFER_KEYWORDS):
-        return 'offer'
-    # Check application confirmations BEFORE rejections — "thank you for applying"
-    # should not be caught by "thank you for your interest" in the rejection list
+    # Check application confirmations FIRST — these are always confirmations, never offers
     if any(kw in text for kw in APPLICATION_CONFIRMED_KEYWORDS):
         return 'application_confirmed'
+    if any(kw in text for kw in OFFER_KEYWORDS):
+        return 'offer'
     if any(kw in text for kw in REJECTION_KEYWORDS):
         return 'rejected'
     if any(kw in text for kw in INTERVIEW_KEYWORDS):
